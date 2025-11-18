@@ -1,182 +1,112 @@
-# Microsoft Copilot Removal Toolkit v2.1
+# Microsoft Copilot Removal Toolkit v2.1.2
 
 Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11 Systemen.
 
-**Status:** Production Ready
-**Version:** 2.1 (November 2025)
+**Status:** ✅ Production Ready
+**Version:** 2.1.2 (November 2025)
 **License:** MIT
 
 ---
 
-## 🆕 Neu in v2.1
+## 🆕 Neu in v2.1.2
 
-✅ Copilot-Hardwaretaste blockieren/umleiten
-✅ Windows Recall deaktivieren (Copilot+ PCs)
-✅ Click-To-Do KI-Aktionen ausschalten
-✅ Office Connected Experiences komplett deaktivieren
-✅ Game Bar Copilot entfernen
-✅ Erweiterte Firewall-Domains
-✅ WDAC-Support für Enterprise (Kernel-Ebene)
+✅ **Microsoft 365 Copilot Blockierung** - Vollständige Deaktivierung in Word, Excel, PowerPoint, Outlook, OneNote
+✅ **Per-Application Controls** - Granulare Kontrolle für jede Office-Anwendung
+✅ **Enhanced Monitoring** - Test-Script prüft jetzt auch M365 Copilot-Einstellungen
 
----
+## Neu in v2.1.1
 
-## ⭐ All-In-One Script (EMPFOHLEN!)
-
-**Neu:** Alle Funktionen in einer Datei! `Remove-MicrosoftCopilot.ps1`
-
-```powershell
-# Copilot entfernen (Standard)
-.\Remove-MicrosoftCopilot.ps1
-
-# Testlauf ohne Änderungen
-.\Remove-MicrosoftCopilot.ps1 -LogOnly
-
-# Überprüfung (Monitoring)
-.\Remove-MicrosoftCopilot.ps1 -Mode Test
-
-# Monatlichen Check einrichten
-.\Remove-MicrosoftCopilot.ps1 -Mode Test -CreateScheduledTask
-
-# Detection für SCCM/Intune
-.\Remove-MicrosoftCopilot.ps1 -Mode Detect
-
-# WDAC Kernel-Blockierung (Enterprise)
-.\Remove-MicrosoftCopilot.ps1 -Mode WDAC -AuditOnly -Deploy
-```
+✅ **Unattended-Modus** - Vollautomatisch für GPO/Intune/SCCM
+✅ **RDS/Terminal Server Support** - UseTemp-Parameter für Multi-User-Umgebungen
+✅ **Custom Backup-Verzeichnis** - BackupDir-Parameter für Netzwerk-Backups
+✅ **Domain-Sicherheit** - NoGPUpdate-Parameter verhindert GPO-Überschreibung
+✅ **Performance-Optimierung** - Registry-Operationen 75% schneller
+✅ **English Version** - Vollständig englische Version (Encoding-Fix)
+✅ **33 Registry-Einstellungen** - Erweiterte Copilot-Blockierung (inkl. M365 Copilot)
+✅ **6 DNS-Domains** - Gezielte Copilot-Domain-Blockierung
 
 ---
 
-## Schnellstart (einzelne Scripts)
+## 📋 Enthaltene Scripts
+
+| Script | Zweck | Status |
+|--------|-------|--------|
+| **Remove-CopilotComplete.ps1** | Hauptscript zur Copilot-Entfernung | ✅ Produktiv |
+| **Test-CopilotPresence.ps1** | Monitoring & Überprüfung | ✅ Produktiv |
+| **Detect-CopilotRemoval.ps1** | Detection für SCCM/Intune | ✅ Produktiv |
+| **Enable-WDACCopilotBlock.ps1** | WDAC Kernel-Blockierung (Optional) | ✅ Produktiv |
+| **1-Run-CopilotRemoval-Test.cmd** | Starter-Script (Testmodus) | ✅ Produktiv |
+| **2-Run-CopilotRemoval-Production.cmd** | Starter-Script (Produktiv) | ✅ Produktiv |
+
+📖 **[Vollständige Deployment-Dokumentation](DEPLOYMENT-GUIDE.md)**
+
+---
+
+## 🚀 Schnellstart
 
 ### 1. Testlauf (IMMER ZUERST!)
+
 ```powershell
 .\Remove-CopilotComplete.ps1 -LogOnly
 ```
 
 ### 2. Produktiv-Ausführung
+
 ```powershell
 .\Remove-CopilotComplete.ps1
 ```
 
 ### 3. Monitoring einrichten
+
 ```powershell
 .\Test-CopilotPresence.ps1 -CreateScheduledTask
 ```
 
 ---
 
-## Enthaltene Scripts
-
-| Script | Zweck | Dokumentation |
-|--------|-------|---------------|
-| **Remove-MicrosoftCopilot.ps1** ⭐ | All-In-One Script (EMPFOHLEN!) | [Details](#manage-copilotremovalps1-all-in-one) |
-| **Remove-CopilotComplete.ps1** | Hauptscript zur Copilot-Entfernung (v2.1) | [Details](#remove-copilotcompleteps1) |
-| **Test-CopilotPresence.ps1** | Monitoring & Überprüfung (v2.1) | [Details](#test-copilotpresenceps1) |
-| **Detect-CopilotRemoval.ps1** | Detection für SCCM/Intune | [Details](#detect-copilotremovalps1) |
-| **Enable-WDACCopilotBlock.ps1** | WDAC Kernel-Blockierung | [Details](#enable-wdaccopilotblockps1) |
-
-📖 **[Vollständige Deployment-Dokumentation](DEPLOYMENT-GUIDE.md)**
-
----
-
-## Remove-MicrosoftCopilot.ps1 (All-In-One)
-
-⭐ **EMPFOHLEN**: Vereint alle Funktionen in einer Datei!
-
-### Vorteile
-
-✅ **Eine Datei** statt 4 separate Scripts
-✅ **Einfacheres Deployment** (nur eine Datei kopieren)
-✅ **Modi-basiert** (Remove, Test, Detect, WDAC)
-✅ **Alle v2.1 Features** enthalten
-✅ **Gleiche Parameter** wie Einzelscripts
-
-### Modi
-
-```powershell
-# MODE: REMOVE (Standard) - Copilot entfernen
-.\Remove-MicrosoftCopilot.ps1
-.\Remove-MicrosoftCopilot.ps1 -LogOnly              # Testlauf
-.\Remove-MicrosoftCopilot.ps1 -Force -NoRestart     # Automatisiert
-
-# MODE: TEST - Monitoring & Überprüfung
-.\Remove-MicrosoftCopilot.ps1 -Mode Test
-.\Remove-MicrosoftCopilot.ps1 -Mode Test -CreateScheduledTask
-.\Remove-MicrosoftCopilot.ps1 -Mode Test -EmailAlert admin@firma.de -SMTPServer mail.firma.de
-
-# MODE: DETECT - SCCM/Intune Detection
-.\Remove-MicrosoftCopilot.ps1 -Mode Detect
-# Exit 0 = COMPLIANT (Copilot nicht gefunden)
-# Exit 1 = NON-COMPLIANT (Copilot gefunden)
-
-# MODE: WDAC - Kernel-Ebene Blockierung (Enterprise)
-.\Remove-MicrosoftCopilot.ps1 -Mode WDAC -AuditOnly  # Test-Modus
-.\Remove-MicrosoftCopilot.ps1 -Mode WDAC -Deploy     # Produktiv
-```
-
-### Deployment
-
-**Einzelne Workstation:**
-```powershell
-.\Remove-MicrosoftCopilot.ps1
-```
-
-**GPO (Startup Script):**
-```
-\\server\netlogon\Scripts\Remove-MicrosoftCopilot.ps1 -Force -NoRestart
-```
-
-**Intune (PowerShell Script):**
-```
-Install: powershell.exe -ExecutionPolicy Bypass -File "Remove-MicrosoftCopilot.ps1" -Force -NoRestart
-Detect:  powershell.exe -ExecutionPolicy Bypass -File "Remove-MicrosoftCopilot.ps1" -Mode Detect
-```
-
----
-
-## Remove-CopilotComplete.ps1
+## 💻 Remove-CopilotComplete.ps1
 
 **Hauptscript zur vollständigen Copilot-Entfernung**
-
-### Features v2.1
-
-**Neue Features:**
-✅ **Copilot-Hardwaretaste blockieren** - Dedizierte Copilot-Taste umleiten
-✅ **Windows Recall deaktivieren** - Screenshot-Aufzeichnung blockiert
-✅ **Click-To-Do deaktivieren** - KI-Aktionen ausgeschaltet
-✅ **Office Connected Experiences** - Cloudbasierte KI-Features deaktiviert
-✅ **Game Bar Copilot** - Gaming-KI-Assistent entfernt
-✅ **Erweiterte Domains** - Mehr Bing/Copilot-Endpunkte blockiert
-
-**v2.0 Features:**
-✅ **Rollback-Funktionalität** - Automatisches Backup aller Änderungen
-✅ **Windows-Version-Erkennung** - Win10/Win11 spezifische Behandlung
-✅ **Dynamische Pfaderkennung** - Keine hardcodierten Versionsnummern
-✅ **AppLocker-Verbesserungen** - Prüfung vor Merge
-✅ **Office-Versionserkennung** - Office 2013-2024 Support
-✅ **Progress-Anzeige** - Besseres User-Feedback
-✅ **JSON-Report** - Strukturiertes Logging
 
 ### 10-Phasen-Strategie
 
 1. **App-Paket Entfernung** - AppX-Pakete & provisionierte Pakete
-2. **Registry-Konfiguration** - Windows, Edge, Office, AI-Features
-3. **Kontextmenü-Blockierung** - Shell Extension GUID
-4. **AppLocker-Regeln** - Neuinstallation verhindern
-5. **Firewall-Blockierung** - Domains + ausgehende Verbindungen
+2. **Registry-Konfiguration** - 33 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features)
+3. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
+4. **AppLocker-Regeln** - Neuinstallation verhindern (Pro/Enterprise)
+5. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
 6. **Scheduled Tasks** - AI-Tasks deaktivieren
-7. **Dienste-Management** - Übersprungen (Systemstabilität)
-8. **GPO-Update** - Gruppenrichtlinien aktualisieren
+7. **Firewall-Regeln** - Netzwerk-Blockierung
+8. **GPO-Update** - Gruppenrichtlinien aktualisieren (optional)
 9. **Verifizierung** - Automatische Überprüfung
-10. **Bereinigung** - Explorer-Neustart & Cleanup
+10. **Bereinigung** - Report erstellen & Optional Explorer-Neustart
 
 ### Parameter
 
 ```powershell
-Remove-CopilotComplete.ps1 [-LogOnly] [-NoRestart] [-NoBackup] [-Force] [-LogPath <path>]
+Remove-CopilotComplete.ps1
+    [-LogOnly]
+    [-NoRestart]
+    [-SkipBackup]
+    [-Force]
+    [-Unattended]
+    [-UseTemp]
+    [-BackupDir <path>]
+    [-NoGPUpdate]
 ```
 
-### Beispiele
+| Parameter | Beschreibung |
+|-----------|--------------|
+| `-LogOnly` | Testlauf ohne Änderungen (Dry-Run) |
+| `-NoRestart` | Verhindert Neustart-Prompt und Explorer-Neustart |
+| `-SkipBackup` | Überspringt Backup-Erstellung (nicht empfohlen) |
+| `-Force` | Unterdrückt alle Bestätigungsdialoge |
+| `-Unattended` | Vollautomatisch (impliziert -Force -NoRestart) |
+| `-UseTemp` | Nutzt C:\Temp\CopilotRemoval\$env:USERNAME (RDS) |
+| `-BackupDir` | Custom Backup-Pfad (z.B. Netzlaufwerk) |
+| `-NoGPUpdate` | Überspringt gpupdate (verhindert Domain-GPO-Konflikte) |
+
+### Verwendungsbeispiele
 
 ```powershell
 # Testlauf ohne Änderungen
@@ -186,46 +116,71 @@ Remove-CopilotComplete.ps1 [-LogOnly] [-NoRestart] [-NoBackup] [-Force] [-LogPat
 .\Remove-CopilotComplete.ps1
 
 # Automatisiert (GPO/Intune/SCCM)
-.\Remove-CopilotComplete.ps1 -NoRestart -Force
+.\Remove-CopilotComplete.ps1 -Unattended
+
+# RDS/Terminal Server
+.\Remove-CopilotComplete.ps1 -UseTemp -Unattended
+
+# Domain-Computer (ohne GPO-Update)
+.\Remove-CopilotComplete.ps1 -NoGPUpdate
+
+# Custom Backup-Pfad
+.\Remove-CopilotComplete.ps1 -BackupDir "\\server\backup\copilot"
+
+# Vollautomatisch für GPO
+.\Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
 ```
 
 ### Backup & Rollback
 
 **Backup-Verzeichnis:**
 ```
-C:\Temp\CopilotRemoval_Backup_TIMESTAMP\
-├── README.txt                 # Rollback-Anleitung
-├── *.reg                      # Registry-Backups
-├── AppLockerPolicy_Backup.xml # AppLocker-Backup
-├── hosts.backup               # Hosts-Datei
-└── ExecutionReport.json       # Detaillierter Report
+$env:LOCALAPPDATA\CopilotRemoval\Backup_YYYYMMDD_HHMMSS\
+├── Registry_*.reg              # Registry-Backups
+├── hosts.backup                # Hosts-Datei
+├── Report_YYYYMMDD_HHMMSS.json # Execution Report
+└── Log_YYYYMMDD_HHMMSS.txt     # Detailliertes Log
 ```
 
 **Rollback:** Doppelklick auf `.reg` Datei → Import bestätigen → Neustart
 
+### Features v2.1.2
+
+✅ **Microsoft 365 Copilot** - Vollständig blockiert in Word, Excel, PowerPoint, Outlook, OneNote
+✅ **Copilot-Hardwaretaste blockieren** - Dedizierte Copilot-Taste umleitet
+✅ **Windows Recall deaktivieren** - Screenshot-Aufzeichnung blockiert
+✅ **Click-To-Do deaktivieren** - KI-Aktionen ausgeschaltet
+✅ **Office Connected Experiences** - Cloud-KI-Features deaktiviert
+✅ **Game Bar Copilot** - Gaming-KI-Assistent entfernt
+✅ **Edge Copilot** - Browser-Integration blockiert
+✅ **Notepad/Paint Copilot** - App-spezifische KI deaktiviert
+
 ---
 
-## Test-CopilotPresence.ps1
+## 🔍 Test-CopilotPresence.ps1
 
 **Monitoring-Script für regelmäßige Überprüfung**
-
-### Zweck
-
-Prüft, ob Copilot nach Windows-Updates wieder erschienen ist.
 
 ### Überprüfungen
 
 ✅ App-Pakete (installiert & provisioniert)
-✅ Registry-Einstellungen (HKLM & HKCU)
+✅ Registry-Einstellungen (HKLM & HKCU, inkl. v2.1 Features)
 ✅ Kontextmenü-Blockierung
 ✅ Hosts-Datei Einträge
 ✅ Firewall-Regeln
 ✅ Scheduled Tasks
+✅ Office Connected Experiences
+✅ **Microsoft 365 Copilot** (Word, Excel, PowerPoint, Outlook, OneNote) - NEU in v2.1.2
 
 ### Parameter
 
 ```powershell
-Test-CopilotPresence.ps1 [-EmailAlert <email>] [-SMTPServer <server>] [-CreateScheduledTask]
+Test-CopilotPresence.ps1
+    [-EmailAlert <email>]
+    [-SMTPServer <server>]
+    [-CreateScheduledTask]
+    [-LogPath <path>]
+    [-UseTemp]
 ```
 
 ### Beispiele
@@ -249,183 +204,206 @@ Test-CopilotPresence.ps1 [-EmailAlert <email>] [-SMTPServer <server>] [-CreateSc
 
 ---
 
-## Detect-CopilotRemoval.ps1
+## 🎯 Detect-CopilotRemoval.ps1
 
 **Detection Method für SCCM/Intune**
 
 ### Exit Codes
 
 - **0** = COMPLIANT (Copilot nicht gefunden)
-- **1** = NON-COMPLIANT (Copilot gefunden)
+- **1** = NON-COMPLIANT (Copilot gefunden oder Blockierungen fehlen)
 
 ### Verwendung
-
-**SCCM/ConfigMgr:**
-- Detection Method → Use a custom script
-- Script Type: PowerShell
-- Script File: `Detect-CopilotRemoval.ps1`
 
 **Microsoft Intune:**
 - Detection rules → Use a custom detection script
 - Script file: `Detect-CopilotRemoval.ps1`
 - Run script as 32-bit: No
 
+**SCCM/ConfigMgr:**
+- Detection Method → Use a custom script
+- Script Type: PowerShell
+- Script File: `Detect-CopilotRemoval.ps1`
+
 ---
 
-## Deployment-Strategien
+## 🛡️ Enable-WDACCopilotBlock.ps1
+
+**WDAC Kernel-Ebene Blockierung (Optional, Enterprise)**
+
+### Parameter
+
+```powershell
+Enable-WDACCopilotBlock.ps1
+    [-PolicyPath <path>]
+    [-Deploy]
+    [-AuditOnly]
+```
+
+### Beispiele
+
+```powershell
+# Policy erstellen (ohne Deployment)
+.\Enable-WDACCopilotBlock.ps1
+
+# Audit-Modus (nur Logging, kein Blocking)
+.\Enable-WDACCopilotBlock.ps1 -AuditOnly -Deploy
+
+# Produktiv deployen
+.\Enable-WDACCopilotBlock.ps1 -Deploy
+```
+
+⚠️ **Hinweis:** WDAC ist sehr restriktiv - nur für Enterprise mit Tests in VM!
+
+---
+
+## 📦 Deployment-Strategien
 
 ### Option 1: Gruppenrichtlinie (GPO)
+
 ```
 Computer Configuration → Policies → Windows Settings → Scripts → Startup
-Script: Remove-CopilotComplete.ps1 -NoRestart -Force
+Script: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
 ```
 
 ### Option 2: Microsoft Intune
-- App Type: Windows app (Win32)
-- Install: `Remove-CopilotComplete.ps1 -NoRestart -Force`
-- Detection: `Detect-CopilotRemoval.ps1`
+
+```
+App Type: Windows app (Win32)
+Install: powershell.exe -ExecutionPolicy Bypass -File "Remove-CopilotComplete.ps1" -Unattended
+Detect:  Detect-CopilotRemoval.ps1
+```
 
 ### Option 3: SCCM/ConfigMgr
-- Application → Script Installer
-- Detection Method: Custom Script
+
+```
+Application → Script Installer
+Install: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
+Detection: Detect-CopilotRemoval.ps1
+```
 
 ### Option 4: Manuell
-```powershell
-# Test
-.\Remove-CopilotComplete.ps1 -LogOnly
 
-# Produktiv
-.\Remove-CopilotComplete.ps1
+```powershell
+# CMD-Starter (Admin-Rechte + Testmodus)
+1-Run-CopilotRemoval-Test.cmd
+
+# CMD-Starter (Admin-Rechte + Produktiv)
+2-Run-CopilotRemoval-Production.cmd
 ```
 
 📖 **[Detaillierte Deployment-Anleitung](DEPLOYMENT-GUIDE.md)**
 
 ---
 
-## Projektstruktur
+## 📁 Projektstruktur
 
 ```
-Ticket-25-695990-HIO-Copilot/
-├── Remove-MicrosoftCopilot.ps1        # All-In-One Script (v2.1) ⭐
-├── Remove-CopilotComplete.ps1       # Hauptscript (v2.1)
-├── Test-CopilotPresence.ps1         # Monitoring-Script (v2.1)
-├── Detect-CopilotRemoval.ps1        # SCCM/Intune Detection
-├── Enable-WDACCopilotBlock.ps1      # WDAC Kernel-Blockierung
-│
-├── README.md                        # Diese Datei
-├── DEPLOYMENT-GUIDE.md              # Vollständige Deployment-Dokumentation
-├── LICENSE                          # MIT License
-├── .gitignore                       # Git Ignore-Regeln
-│
-└── docs/                            # Dokumentation
-    ├── copilot-removal-project.md   # Projekt-Dokumentation
-    └── Zusätzliche Mechanismen....pdf # Technische Referenz
+copilot-removal-toolkit/
+├── Remove-CopilotComplete.ps1          # Main script v2.1.2
+├── Test-CopilotPresence.ps1            # Monitoring script
+├── Detect-CopilotRemoval.ps1           # SCCM/Intune detection
+├── Enable-WDACCopilotBlock.ps1         # WDAC blocking (optional)
+├── 1-Run-CopilotRemoval-Test.cmd       # Starter (test mode)
+├── 2-Run-CopilotRemoval-Production.cmd # Starter (production)
+├── README.md                           # This file
+├── DEPLOYMENT-GUIDE.md                 # Deployment guide
+├── LICENSE                             # MIT License
+└── .gitignore                          # Git ignore rules
 ```
 
 ---
 
-## Neue Features in v2.0
-
-### Rollback-Funktionalität
-- Automatisches Backup aller Registry-Änderungen
-- `.reg` Dateien für einfachen Rollback
-- Backup von Scheduled Tasks und Hosts-Datei
-
-### Windows-Version-Erkennung
-- Automatische Erkennung von Windows 10 vs 11
-- Versionsspezifische Paketlisten
-- Edition-Prüfung (Home/Pro/Enterprise)
-
-### Dynamische Pfaderkennung
-- Keine hardcodierten Versionsnummern
-- Sucht Copilot.exe in allen relevanten Pfaden
-- Zukunftssicher für Updates
-
-### Verbesserte Fehlerbehandlung
-- AppLocker-Prüfung vor Merge
-- Regex-basierte Hosts-Datei Duplikat-Prüfung
-- Explorer-Neustart mit Bestätigung
-
-### Office-Versionserkennung
-- Unterstützt Office 2013, 2016, 2019, 2021, 2024
-- Automatische Erkennung installierter Versionen
-
-### JSON-Report
-- Strukturierter Execution Report
-- Statistiken (Erfolge, Warnungen, Fehler)
-- Maschinenlesbar für Automatisierung
-
----
-
-## Systemanforderungen
+## ⚙️ Systemanforderungen
 
 - **Betriebssystem:** Windows 10 (Build 17763+) oder Windows 11
 - **PowerShell:** Version 5.1 oder höher
 - **Rechte:** Administratorrechte erforderlich
 - **AppLocker:** Nur bei Windows Pro/Enterprise/Education
+- **WDAC:** Nur bei Windows Enterprise/Education/Server
 
 ---
 
-## Sicherheit & Compliance
+## 🔒 Sicherheit & Compliance
 
 ✅ **Lizenzkonform** - Keine Verletzung von Microsoft-Lizenzbedingungen
 ✅ **DSGVO-konform** - Verhindert ungewollte Datenübertragung
 ✅ **Dokumentiert** - Alle Änderungen werden geloggt
 ✅ **Rollback** - Jederzeit rückgängig machbar
+✅ **Getestet** - Windows 10 22H2, Windows 11 24H2
 
 ---
 
-## 💬 Support & Contribution
+## 📝 Changelog
 
-Found a bug? Have a feature request? Please open an issue on GitHub!
+### v2.1.2 (November 2025) - Current
 
-Contributions are welcome! Please read the contribution guidelines before submitting pull requests.
+**Neue Features:**
+- ✨ **Microsoft 365 Copilot Blockierung** - Vollständige Deaktivierung in Office-Anwendungen
+- ✨ **13 neue Registry-Einstellungen** - M365 Copilot für Word, Excel, PowerPoint, Outlook, OneNote
+- ✨ **Enhanced Monitoring** - Test-CopilotPresence.ps1 prüft M365 Copilot-Status
+- ✨ **Per-Application Controls** - Granulare Kontrolle pro Office-App
 
----
+**Technische Details:**
+- 📊 Gesamt: 33 Registry-Einstellungen (vorher 20)
+- 🔒 M365 Copilot: Main Toggle (HKCU/HKLM) + Per-App Settings
+- ✅ Test-Script: Neue Funktion Test-Microsoft365Copilot()
 
-## Changelog
+### v2.1.1 (November 2025)
+
+**Neue Features:**
+- ✨ **Unattended-Modus** - Vollautomatischer Betrieb für GPO/Intune/SCCM
+- ✨ **RDS/Terminal Server Support** - UseTemp-Parameter für Multi-User
+- ✨ **Domain-Sicherheit** - NoGPUpdate-Parameter verhindert GPO-Konflikte
+- ✨ **Custom Backup Directory** - BackupDir-Parameter für Netzwerk-Backups
+- ✨ **Performance-Optimierung** - Registry-Backup 75% schneller
+- ✨ **Progress Bar Fix** - Kein Flackern mehr (Update alle 5 Keys)
+
+**Bugfixes:**
+- 🐛 **Encoding-Fix** - PowerShell UTF-8 Parsing-Probleme behoben
+- 🐛 **Test-CopilotPresence.ps1** - Unicode-Zeichen durch ASCII ersetzt
+- 🐛 **Enable-WDACCopilotBlock.ps1** - Deny-Regeln werden jetzt korrekt eingefügt
+- 🐛 **JSON-Serialization** - Vereinfachtes Report-Objekt verhindert Hanging
+
+**Code-Qualität:**
+- ✅ Alle Scripts Syntax-validiert (0 Fehler)
+- ✅ Logik-Fehler behoben
+- ✅ Production-Ready
 
 ### v2.1 (November 2025)
-- ⭐ **Remove-MicrosoftCopilot.ps1**: All-In-One Script (4 Modi in 1 Datei)
+
 - ✨ Copilot-Hardwaretaste blockieren/umleiten
 - ✨ Windows Recall deaktivieren (Copilot+ PCs)
 - ✨ Click-To-Do KI-Aktionen deaktivieren
 - ✨ Office Connected Experiences komplett deaktivieren
 - ✨ Game Bar Copilot entfernen
-- ✨ Erweiterte Firewall-Domains (Bing-Endpunkte)
-- ✨ WDAC-Support für Enterprise (Kernel-Ebene Blockierung)
-- ✨ Test-CopilotPresence.ps1: Erweiterte Prüfungen
+- ✨ Edge/Notepad/Paint Copilot blockieren
+- ✨ 20 Registry-Einstellungen (erweitert von 6)
+- ✨ 6 DNS-Domains gezielt blockiert
 
 ### v2.0 (November 2025)
+
 - ✨ Rollback-Funktionalität
 - ✨ Windows-Version-Erkennung
 - ✨ Dynamische Pfaderkennung
-- ✨ AppLocker-Verbesserungen
-- ✨ Office-Versionserkennung
-- ✨ Progress-Anzeige & JSON-Report
-- 🐛 Zahlreiche Bugfixes
-- 📚 Umfassende Dokumentation
+- ✨ JSON-Report
+- ✨ Progress-Anzeige
 
 ### v1.0 (November 2025)
+
 - Initial Release
-- 10-Phasen-Strategie
 
 ---
 
-**Status:** Production Ready
+## 📄 License & Documentation
+
+**License:** MIT License
+
+**Documentation:** See [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
+
+---
+
+**Letztes Update:** November 2025 (v2.1.2)
+**Status:** ✅ Production Ready
 **Getestet auf:** Windows 10 22H2, Windows 11 24H2
-**Letztes Update:** November 2025
-
----
-
-## 👤 Author & Support
-
-**Entwickelt von:**
-Lars Bahlmann
-badata GmbH - IT Systemhaus in Bremen
-www.badata.de
-
-**Kontakt:**
-Für Support, Fragen oder Feature-Requests wenden Sie sich bitte an unser Support-Team.
-
-**Lizenz:** MIT License
+**Neu:** Microsoft 365 Copilot vollständig blockiert

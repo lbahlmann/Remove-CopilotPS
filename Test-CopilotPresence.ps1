@@ -1,34 +1,34 @@
 <#
 .SYNOPSIS
-    Überprüft ob Microsoft Copilot auf dem System vorhanden ist
+    Ueberprueft ob Microsoft Copilot auf dem System vorhanden ist
 .DESCRIPTION
-    Dieses Script führt umfassende Überprüfungen durch, ob Microsoft Copilot
+    Dieses Script fuehrt umfassende Ueberpruefungen durch, ob Microsoft Copilot
     auf dem System installiert ist oder Blockierungen aktiv sind.
 
-    Kann als Scheduled Task für regelmäßige Überwachung verwendet werden.
+    Kann als Scheduled Task fuer regelmaessige Ueberwachung verwendet werden.
 .PARAMETER EmailAlert
-    E-Mail-Adresse für Benachrichtigungen (optional)
+    E-Mail-Adresse fuer Benachrichtigungen (optional)
 .PARAMETER SMTPServer
-    SMTP-Server für E-Mail-Versand (optional)
+    SMTP-Server fuer E-Mail-Versand (optional)
 .PARAMETER CreateScheduledTask
-    Erstellt einen Scheduled Task für monatliche Überprüfung
+    Erstellt einen Scheduled Task fuer monatliche Ueberpruefung
 .PARAMETER LogPath
     Pfad zur Log-Datei (Standard: $env:LOCALAPPDATA\CopilotRemoval\Logs\...)
 .PARAMETER UseTemp
-    Verwendet C:\Temp statt AppData (mit User-Differenzierung für RDS)
+    Verwendet C:\Temp statt AppData (mit User-Differenzierung fuer RDS)
 .EXAMPLE
     .\Test-CopilotPresence.ps1
-    Führt einfache Überprüfung durch
+    Fuehrt einfache Ueberpruefung durch
 .EXAMPLE
     .\Test-CopilotPresence.ps1 -EmailAlert admin@firma.de -SMTPServer mail.firma.de
-    Führt Überprüfung durch und sendet E-Mail bei Fund
+    Fuehrt Ueberpruefung durch und sendet E-Mail bei Fund
 .EXAMPLE
     .\Test-CopilotPresence.ps1 -CreateScheduledTask
     Erstellt monatlichen Scheduled Task
 .AUTHOR
     Lars Bahlmann / badata GmbH - IT Systemhaus in Bremen / www.badata.de
 .VERSION
-    1.0 - November 2025
+    1.1 - November 2025 (Microsoft 365 Copilot Checks)
 #>
 
 param(
@@ -39,11 +39,11 @@ param(
     [switch]$UseTemp
 )
 
-# Automatische Pfad-Ermittlung (RDS-sicher, ohne Systemordner-Änderungen)
+# Automatische Pfad-Ermittlung (RDS-sicher, ohne Systemordner-Aenderungen)
 if (-not $LogPath) {
     $DateStamp = Get-Date -Format 'yyyyMMdd'
     if ($UseTemp) {
-        # C:\Temp mit User-Differenzierung (für RDS) - WICHTIG: Mit USERNAME!
+        # C:\Temp mit User-Differenzierung (fuer RDS) - WICHTIG: Mit USERNAME!
         $LogPath = "C:\Temp\CopilotRemoval\$env:USERNAME\Logs\CopilotMonitoring_$DateStamp.log"
     } else {
         # Standard: User AppData (automatisch user-spezifisch)
@@ -78,7 +78,7 @@ function Write-Log {
 }
 
 function Test-AppPackages {
-    Write-Log "Prüfe App-Pakete..." -Type Info
+    Write-Log "Pruefe App-Pakete..." -Type Info
 
     $CopilotPackages = @(
         "Microsoft.Copilot",
@@ -98,7 +98,7 @@ function Test-AppPackages {
         }
     }
 
-    # Provisionierte Pakete prüfen
+    # Provisionierte Pakete pruefen
     $Provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "*Copilot*" }
     if ($Provisioned) {
         $Found += $Provisioned
@@ -114,14 +114,14 @@ function Test-AppPackages {
 }
 
 function Test-RegistrySettings {
-    Write-Log "Prüfe Registry-Einstellungen..." -Type Info
+    Write-Log "Pruefe Registry-Einstellungen..." -Type Info
 
     $Checks = @(
         @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name="TurnOffWindowsCopilot"; Expected=1},
         @{Path="HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name="TurnOffWindowsCopilot"; Expected=1},
         @{Path="HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"; Name="ShowCopilotButton"; Expected=0},
 
-        # NEW v2.1: Erweiterte Prüfungen
+        # NEW v2.1: Erweiterte Pruefungen
         @{Path="HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI"; Name="SetCopilotHardwareKey"; Expected=1},  # Hardwaretaste
         @{Path="HKCU:\Software\Microsoft\Windows\CurrentVersion\Recall"; Name="DisableRecall"; Expected=1},  # Recall
         @{Path="HKCU:\Software\Microsoft\Windows\CurrentVersion\ClickToDo"; Name="DisableClickToDo"; Expected=1},  # Click-To-Do
@@ -153,7 +153,7 @@ function Test-RegistrySettings {
 }
 
 function Test-ContextMenu {
-    Write-Log "Prüfe Kontextmenü-Blockierung..." -Type Info
+    Write-Log "Pruefe Kontextmenue-Blockierung..." -Type Info
 
     $BlockedPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked"
     $CopilotGUID = "{CB3B0003-8088-4EDE-8769-8B354AB2FF8C}"
@@ -161,20 +161,20 @@ function Test-ContextMenu {
     try {
         $Blocked = Get-ItemProperty -Path $BlockedPath -Name $CopilotGUID -ErrorAction SilentlyContinue
         if ($Blocked) {
-            Write-Log "OK: Kontextmenü-Extension blockiert" -Type Success
+            Write-Log "OK: Kontextmenue-Extension blockiert" -Type Success
             return @{Status="OK"; Details="Blockiert"}
         } else {
-            Write-Log "WARNUNG: Kontextmenü-Extension nicht blockiert" -Type Warning
+            Write-Log "WARNUNG: Kontextmenue-Extension nicht blockiert" -Type Warning
             return @{Status="FEHLER"; Details="Nicht blockiert"}
         }
     } catch {
-        Write-Log "FEHLER: Kontextmenü-Blockierung nicht konfiguriert" -Type Warning
+        Write-Log "FEHLER: Kontextmenue-Blockierung nicht konfiguriert" -Type Warning
         return @{Status="FEHLER"; Details="Nicht konfiguriert"}
     }
 }
 
 function Test-HostsFile {
-    Write-Log "Prüfe Hosts-Datei..." -Type Info
+    Write-Log "Pruefe Hosts-Datei..." -Type Info
 
     $HostsFile = "$env:SystemRoot\System32\drivers\etc\hosts"
     $ExpectedDomains = @(
@@ -203,7 +203,7 @@ function Test-HostsFile {
 }
 
 function Test-FirewallRules {
-    Write-Log "Prüfe Firewall-Regeln..." -Type Info
+    Write-Log "Pruefe Firewall-Regeln..." -Type Info
 
     $CopilotRules = Get-NetFirewallRule -DisplayName "*Copilot*" -ErrorAction SilentlyContinue
 
@@ -218,7 +218,7 @@ function Test-FirewallRules {
 }
 
 function Test-ScheduledTasks {
-    Write-Log "Prüfe Scheduled Tasks..." -Type Info
+    Write-Log "Pruefe Scheduled Tasks..." -Type Info
 
     $TaskPaths = @(
         "\Microsoft\Windows\Application Experience\",
@@ -249,7 +249,7 @@ function Test-ScheduledTasks {
 }
 
 function Test-OfficeConnectedExperiences {
-    Write-Log "Prüfe Office Connected Experiences..." -Type Info
+    Write-Log "Pruefe Office Connected Experiences..." -Type Info
 
     $OfficeVersions = @("16.0", "15.0", "17.0")
     $Issues = @()
@@ -260,7 +260,7 @@ function Test-OfficeConnectedExperiences {
         if (Test-Path $OfficePath) {
             $CheckedVersions++
 
-            # Prüfe DisconnectedState (sollte 2 sein)
+            # Pruefe DisconnectedState (sollte 2 sein)
             try {
                 $DisconnectedState = Get-ItemProperty -Path $OfficePath -Name "DisconnectedState" -ErrorAction SilentlyContinue
                 if ($null -eq $DisconnectedState -or $DisconnectedState.DisconnectedState -ne 2) {
@@ -289,6 +289,58 @@ function Test-OfficeConnectedExperiences {
     }
 }
 
+function Test-Microsoft365Copilot {
+    Write-Log "Pruefe Microsoft 365 Copilot..." -Type Info
+
+    $Checks = @(
+        # Main Toggle
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\common\copilot"; Name="TurnOffCopilot"; Expected=1},
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\copilot"; Name="TurnOffCopilot"; Expected=1},
+
+        # Per-Application
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\word\options\copilot"; Name="DisableCopilot"; Expected=1},
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\excel\options\copilot"; Name="DisableCopilot"; Expected=1},
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\powerpoint\options\copilot"; Name="DisableCopilot"; Expected=1},
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\outlook\options\copilot"; Name="DisableCopilot"; Expected=1},
+
+        # Additional Controls
+        @{Path="HKCU:\Software\Policies\Microsoft\office\16.0\common"; Name="AllowCopilot"; Expected=0},
+        @{Path="HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common"; Name="AllowCopilot"; Expected=0}
+    )
+
+    $Issues = @()
+    $CheckedCount = 0
+    $OfficeInstalled = Test-Path "HKCU:\Software\Microsoft\Office\16.0"
+
+    if (-not $OfficeInstalled) {
+        Write-Log "INFO: Office 16.0 (365/2019/2021) nicht installiert" -Type Info
+        return @{Status="NICHT_ANWENDBAR"; Issues=$null}
+    }
+
+    foreach ($Check in $Checks) {
+        try {
+            $Value = Get-ItemProperty -Path $Check.Path -Name $Check.Name -ErrorAction SilentlyContinue
+            if ($null -eq $Value -or $Value.($Check.Name) -ne $Check.Expected) {
+                $Issues += "$($Check.Path)\$($Check.Name) ist nicht korrekt gesetzt"
+                Write-Log "WARNUNG: $($Check.Path)\$($Check.Name) = $($Value.($Check.Name)) (erwartet: $($Check.Expected))" -Type Warning
+            } else {
+                Write-Log "OK: $($Check.Path)\$($Check.Name) = $($Check.Expected)" -Type Success
+                $CheckedCount++
+            }
+        } catch {
+            $Issues += "$($Check.Path)\$($Check.Name) existiert nicht"
+            Write-Log "WARNUNG: $($Check.Path)\$($Check.Name) existiert nicht" -Type Warning
+        }
+    }
+
+    if ($Issues.Count -eq 0) {
+        Write-Log "OK: Microsoft 365 Copilot vollstaendig blockiert ($CheckedCount Einstellungen)" -Type Success
+        return @{Status="OK"; Issues=$null}
+    } else {
+        return @{Status="FEHLER"; Issues=$Issues}
+    }
+}
+
 function Send-AlertEmail {
     param(
         [object]$Results
@@ -300,7 +352,7 @@ function Send-AlertEmail {
 
     $Subject = "WARNUNG: Copilot auf $env:COMPUTERNAME erkannt"
     $Body = @"
-Copilot-Überwachung hat potenzielle Probleme erkannt:
+Copilot-Ueberwachung hat potenzielle Probleme erkannt:
 
 Computer: $env:COMPUTERNAME
 Zeitpunkt: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
@@ -309,10 +361,12 @@ Ergebnisse:
 -----------
 App-Pakete: $($Results.AppPackages.Status)
 Registry: $($Results.Registry.Status)
-Kontextmenü: $($Results.ContextMenu.Status)
+Kontextmenue: $($Results.ContextMenu.Status)
 Hosts-Datei: $($Results.HostsFile.Status)
 Firewall: $($Results.Firewall.Status)
 Tasks: $($Results.Tasks.Status)
+Office Connected Exp: $($Results.OfficeConnectedExp.Status)
+Microsoft 365 Copilot: $($Results.Microsoft365Copilot.Status)
 
 Gesamtstatus: $($Results.Overall)
 
@@ -338,17 +392,17 @@ badata GmbH - IT Systems
 }
 
 function New-MonitoringTask {
-    Write-Log "Erstelle Scheduled Task für monatliche Überprüfung..." -Type Info
+    Write-Log "Erstelle Scheduled Task fuer monatliche Ueberpruefung..." -Type Info
 
     $TaskName = "Copilot-Monitoring"
     $TaskPath = "\badata\"
     $ScriptPath = $PSCommandPath
 
-    # Prüfe ob Task bereits existiert
+    # Pruefe ob Task bereits existiert
     $ExistingTask = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
     if ($ExistingTask) {
         Write-Log "Task existiert bereits: $TaskPath$TaskName" -Type Warning
-        $Overwrite = Read-Host "Überschreiben? (J/N)"
+        $Overwrite = Read-Host "Ueberschreiben? (J/N)"
         if ($Overwrite -ne "J" -and $Overwrite -ne "j") {
             Write-Log "Task-Erstellung abgebrochen" -Type Info
             return
@@ -369,7 +423,7 @@ function New-MonitoringTask {
                                                -StartWhenAvailable `
                                                -RunOnlyIfNetworkAvailable
 
-    # Task-Principal (als SYSTEM ausführen)
+    # Task-Principal (als SYSTEM ausfuehren)
     $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 
     # Task registrieren
@@ -380,11 +434,11 @@ function New-MonitoringTask {
                                 -Trigger $Trigger `
                                 -Settings $Settings `
                                 -Principal $Principal `
-                                -Description "Monatliche Überprüfung auf Microsoft Copilot Installation" `
+                                -Description "Monatliche Ueberpruefung auf Microsoft Copilot Installation" `
                                 -ErrorAction Stop
 
         Write-Log "Scheduled Task erfolgreich erstellt: $TaskPath$TaskName" -Type Success
-        Write-Log "Nächste Ausführung: $(Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath | Get-ScheduledTaskInfo | Select-Object -ExpandProperty NextRunTime)" -Type Info
+        Write-Log "Naechste Ausfuehrung: $(Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath | Get-ScheduledTaskInfo | Select-Object -ExpandProperty NextRunTime)" -Type Info
     } catch {
         Write-Log "Fehler beim Erstellen des Scheduled Tasks: $($_.Exception.Message)" -Type Error
     }
@@ -394,7 +448,7 @@ function New-MonitoringTask {
 # HAUPTPROGRAMM
 # ========================================
 Write-Log "========================================" -Type Info
-Write-Log "Copilot-Präsenz-Überprüfung gestartet" -Type Info
+Write-Log "Copilot-Praesenz-Ueberpruefung gestartet" -Type Info
 Write-Log "========================================" -Type Info
 Write-Log "Computer: $env:COMPUTERNAME" -Type Info
 Write-Log "Benutzer: $env:USERNAME" -Type Info
@@ -406,7 +460,7 @@ if ($CreateScheduledTask) {
     exit 0
 }
 
-# Alle Überprüfungen durchführen
+# Alle Ueberpruefungen durchfuehren
 $Results = @{
     AppPackages = Test-AppPackages
     Registry = Test-RegistrySettings
@@ -414,7 +468,8 @@ $Results = @{
     HostsFile = Test-HostsFile
     Firewall = Test-FirewallRules
     Tasks = Test-ScheduledTasks
-    OfficeConnectedExp = Test-OfficeConnectedExperiences  # NEW v2.1
+    OfficeConnectedExp = Test-OfficeConnectedExperiences  # v2.1
+    Microsoft365Copilot = Test-Microsoft365Copilot  # NEW v2.1.2
 }
 
 # Gesamtauswertung
@@ -449,25 +504,25 @@ foreach ($Key in $Results.Keys) {
 Write-Log "" -Type Info
 
 if ($AllOK) {
-    Write-Log "✓ GESAMTSTATUS: SAUBER - Kein Copilot gefunden, alle Blockierungen aktiv" -Type Success
+    Write-Log "[OK] GESAMTSTATUS: SAUBER - Kein Copilot gefunden, alle Blockierungen aktiv" -Type Success
     $Results.Overall = "SAUBER"
     exit 0
 } elseif ($Results.AppPackages.Status -eq "GEFUNDEN") {
-    Write-Log "✗ GESAMTSTATUS: COPILOT GEFUNDEN - Sofortige Aktion erforderlich!" -Type Error
+    Write-Log "[X] GESAMTSTATUS: COPILOT GEFUNDEN - Sofortige Aktion erforderlich!" -Type Error
     $Results.Overall = "GEFUNDEN"
 
     # E-Mail-Alert senden
     Send-AlertEmail -Results $Results
 
     Write-Log "" -Type Info
-    Write-Log "EMPFEHLUNG: Führen Sie Remove-CopilotComplete.ps1 erneut aus" -Type Warning
+    Write-Log "EMPFEHLUNG: Fuehren Sie Remove-CopilotComplete.ps1 erneut aus" -Type Warning
 
     exit 1
 } else {
-    Write-Log "⚠ GESAMTSTATUS: BLOCKIERUNGEN UNVOLLSTÄNDIG - $Warnings Warnung(en)" -Type Warning
-    $Results.Overall = "UNVOLLSTÄNDIG"
+    Write-Log "[!] GESAMTSTATUS: BLOCKIERUNGEN UNVOLLSTAENDIG - $Warnings Warnung(en)" -Type Warning
+    $Results.Overall = "UNVOLLSTAENDIG"
 
-    # E-Mail-Alert senden (nur bei kritischen Fällen)
+    # E-Mail-Alert senden (nur bei kritischen Faellen)
     if ($Warnings -gt 2) {
         Send-AlertEmail -Results $Results
     }

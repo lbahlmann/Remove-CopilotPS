@@ -7,13 +7,13 @@
     um Microsoft Copilot zu blockieren. WDAC ist restriktiver als AppLocker
     und bietet Schutz auf tieferer Systemebene.
 
-    ACHTUNG: WDAC ist sehr restriktiv und erfordert sorgfältige Tests!
-    Nur für Enterprise-Umgebungen mit IT-Expertise empfohlen.
+    ACHTUNG: WDAC ist sehr restriktiv und erfordert sorgfaeltige Tests!
+    Nur fuer Enterprise-Umgebungen mit IT-Expertise empfohlen.
 
     Das Script:
     1. Erstellt eine WDAC-Policy-XML
     2. Blockiert Copilot basierend auf Package Family Name
-    3. Konvertiert XML zu binärer Policy
+    3. Konvertiert XML zu binaerer Policy
     4. Deployed die Policy (optional)
 
 .PARAMETER PolicyPath
@@ -30,7 +30,7 @@
     Erstellt und deployed WDAC Policy
 .EXAMPLE
     .\Enable-WDACCopilotBlock.ps1 -AuditOnly -Deploy
-    Erstellt Audit-Policy (empfohlen für Tests!)
+    Erstellt Audit-Policy (empfohlen fuer Tests!)
 .AUTHOR
     Lars Bahlmann / badata GmbH - IT Systemhaus in Bremen / www.badata.de
 .VERSION
@@ -70,12 +70,12 @@ function Write-Log {
 }
 
 function Test-WDACSupport {
-    Write-Log "Prüfe WDAC-Unterstützung..." -Type Info
+    Write-Log "Pruefe WDAC-Unterstuetzung..." -Type Info
 
-    # Prüfe Windows-Edition
+    # Pruefe Windows-Edition
     $Edition = (Get-WindowsEdition -Online).Edition
     if ($Edition -notmatch "Enterprise|Education|Server") {
-        Write-Log "WARNUNG: WDAC wird typischerweise nur auf Enterprise/Education/Server unterstützt" -Type Warning
+        Write-Log "WARNUNG: WDAC wird typischerweise nur auf Enterprise/Education/Server unterstuetzt" -Type Warning
         Write-Log "Aktuelle Edition: $Edition" -Type Warning
         $Continue = Read-Host "Trotzdem fortfahren? (J/N)"
         if ($Continue -ne "J" -and $Continue -ne "j") {
@@ -84,15 +84,15 @@ function Test-WDACSupport {
         }
     }
 
-    # Prüfe ob ConfigCI-Modul verfügbar ist
+    # Pruefe ob ConfigCI-Modul verfuegbar ist
     $ConfigCI = Get-Command -Name New-CIPolicy -ErrorAction SilentlyContinue
     if (-not $ConfigCI) {
-        Write-Log "FEHLER: ConfigCI PowerShell-Modul nicht verfügbar!" -Type Error
-        Write-Log "WDAC wird auf diesem System nicht unterstützt" -Type Error
+        Write-Log "FEHLER: ConfigCI PowerShell-Modul nicht verfuegbar!" -Type Error
+        Write-Log "WDAC wird auf diesem System nicht unterstuetzt" -Type Error
         exit 1
     }
 
-    Write-Log "WDAC wird unterstützt" -Type Success
+    Write-Log "WDAC wird unterstuetzt" -Type Success
     return $true
 }
 
@@ -111,7 +111,7 @@ function Get-CopilotPackageInfo {
         return $CopilotPackages
     } else {
         Write-Log "HINWEIS: Keine Copilot-Pakete installiert (gut!)" -Type Success
-        Write-Log "Policy wird trotzdem erstellt zur Prävention" -Type Info
+        Write-Log "Policy wird trotzdem erstellt zur Praevention" -Type Info
         return $null
     }
 }
@@ -124,7 +124,7 @@ function New-WDACCopilotPolicy {
 
     Write-Log "Erstelle WDAC Policy..." -Type Info
 
-    # Erstelle Temp-Verzeichnis für Policy-Erstellung
+    # Erstelle Temp-Verzeichnis fuer Policy-Erstellung
     $TempDir = Join-Path $env:TEMP "WDACCopilot_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
     New-Item -Path $TempDir -ItemType Directory -Force | Out-Null
 
@@ -146,30 +146,34 @@ function New-WDACCopilotPolicy {
         # Lade Policy als XML
         [xml]$PolicyXML = Get-Content $BasePolicyPath
 
-        # Füge Deny-Regel für Copilot hinzu
-        $DenyRule = @"
-    <Deny ID="ID_DENY_COPILOT_1" FriendlyName="Block Microsoft Copilot" Comment="Blocks all Microsoft Copilot packages">
-      <Conditions>
-        <FilePublisherCondition PublisherName="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" ProductName="Microsoft.Copilot" FileName="*">
-          <BinaryVersionRange LowSection="*" HighSection="*" />
-        </FilePublisherCondition>
-      </Conditions>
-    </Deny>
-    <Deny ID="ID_DENY_COPILOT_2" FriendlyName="Block Copilot Provider" Comment="Blocks Copilot Provider">
-      <Conditions>
-        <FilePublisherCondition PublisherName="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" ProductName="Microsoft.Windows.Ai.Copilot.Provider" FileName="*">
-          <BinaryVersionRange LowSection="*" HighSection="*" />
-        </FilePublisherCondition>
-      </Conditions>
-    </Deny>
-"@
-
         # Policy-Metadaten aktualisieren
         $PolicyXML.SiPolicy.PolicyID = [guid]::NewGuid().ToString("B").ToUpper()
         $PolicyXML.SiPolicy.SetAttribute("PolicyType", "Base Policy")
         $PolicyXML.SiPolicy.SetAttribute("PolicyName", "Block Microsoft Copilot")
 
-        # Füge Policy-Optionen hinzu
+        # Erstelle FileRules-Knoten falls nicht vorhanden
+        if (-not $PolicyXML.SiPolicy.FileRules) {
+            $FileRulesNode = $PolicyXML.CreateElement("FileRules", $PolicyXML.SiPolicy.NamespaceURI)
+            $PolicyXML.SiPolicy.AppendChild($FileRulesNode) | Out-Null
+        }
+
+        # Deny-Regel 1: Microsoft.Copilot
+        $DenyRule1 = $PolicyXML.CreateElement("Deny", $PolicyXML.SiPolicy.NamespaceURI)
+        $DenyRule1.SetAttribute("ID", "ID_DENY_COPILOT_1")
+        $DenyRule1.SetAttribute("FriendlyName", "Block Microsoft Copilot")
+        $DenyRule1.SetAttribute("FileName", "Microsoft.Copilot*.exe")
+        $PolicyXML.SiPolicy.FileRules.AppendChild($DenyRule1) | Out-Null
+
+        # Deny-Regel 2: Copilot Provider
+        $DenyRule2 = $PolicyXML.CreateElement("Deny", $PolicyXML.SiPolicy.NamespaceURI)
+        $DenyRule2.SetAttribute("ID", "ID_DENY_COPILOT_2")
+        $DenyRule2.SetAttribute("FriendlyName", "Block Copilot Provider")
+        $DenyRule2.SetAttribute("FileName", "Microsoft.Windows.Ai.Copilot.Provider*.exe")
+        $PolicyXML.SiPolicy.FileRules.AppendChild($DenyRule2) | Out-Null
+
+        Write-Log "Deny-Regeln zur Policy hinzugefuegt" -Type Success
+
+        # Fuege Policy-Optionen hinzu
         if ($AuditMode) {
             Write-Log "Erstelle Policy im AUDIT-MODUS (nur Logging)" -Type Warning
 
@@ -203,7 +207,7 @@ function Convert-PolicyToBinary {
         [string]$XMLPath
     )
 
-    Write-Log "Konvertiere Policy zu binärem Format..." -Type Info
+    Write-Log "Konvertiere Policy zu binaerem Format..." -Type Info
 
     $BinaryPath = $XMLPath -replace "\.xml$", ".bin"
 
@@ -211,10 +215,10 @@ function Convert-PolicyToBinary {
         ConvertFrom-CIPolicy -XmlFilePath $XMLPath -BinaryFilePath $BinaryPath
 
         if (Test-Path $BinaryPath) {
-            Write-Log "Binäre Policy erstellt: $BinaryPath" -Type Success
+            Write-Log "Binaere Policy erstellt: $BinaryPath" -Type Success
             return $BinaryPath
         } else {
-            Write-Log "FEHLER: Binäre Policy konnte nicht erstellt werden" -Type Error
+            Write-Log "FEHLER: Binaere Policy konnte nicht erstellt werden" -Type Error
             return $null
         }
     } catch {
@@ -233,10 +237,10 @@ function Deploy-WDACPolicy {
     Write-Log "WDAC POLICY DEPLOYMENT" -Type Warning
     Write-Log "========================================" -Type Warning
     Write-Log "ACHTUNG: Das Deployment einer WDAC Policy ist ein kritischer Vorgang!" -Type Warning
-    Write-Log "         Falsch konfigurierte Policies können Systeminstabilität verursachen!" -Type Warning
+    Write-Log "         Falsch konfigurierte Policies koennen Systeminstabilitaet verursachen!" -Type Warning
     Write-Log "" -Type Info
 
-    $Confirm = Read-Host "Möchten Sie die Policy wirklich deployen? (J/N)"
+    $Confirm = Read-Host "Moechten Sie die Policy wirklich deployen? (J/N)"
     if ($Confirm -ne "J" -and $Confirm -ne "j") {
         Write-Log "Deployment abgebrochen" -Type Info
         return $false
@@ -288,13 +292,13 @@ Write-Log "WDAC Copilot-Blockierung v1.0" -Type Info
 Write-Log "======================================" -Type Info
 Write-Log "" -Type Info
 
-# Prüfe Admin-Rechte
+# Pruefe Admin-Rechte
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Log "FEHLER: Script erfordert Administratorrechte!" -Type Error
     exit 1
 }
 
-# Prüfe WDAC-Unterstützung
+# Pruefe WDAC-Unterstuetzung
 if (-not (Test-WDACSupport)) {
     exit 1
 }
@@ -335,7 +339,7 @@ if ($Deploy) {
     Write-Log "Policy wurde NICHT deployed (verwenden Sie -Deploy Parameter)" -Type Info
     Write-Log "" -Type Info
     Write-Log "Manuelles Deployment:" -Type Info
-    Write-Log "1. Policy in Testumgebung ausführlich testen!" -Type Warning
+    Write-Log "1. Policy in Testumgebung ausfuehrlich testen!" -Type Warning
     Write-Log "2. Policy deployen:" -Type Info
     Write-Log "   Copy-Item '$BinaryPath' 'C:\Windows\System32\CodeIntegrity\CiPolicies\Active\{GUID}.cip'" -Type Info
     Write-Log "3. System neu starten" -Type Info
@@ -346,7 +350,7 @@ Write-Log "WICHTIGE HINWEISE:" -Type Warning
 Write-Log "- Teste die Policy in einer VM oder Testumgebung zuerst!" -Type Warning
 Write-Log "- Im Audit-Modus werden Ereignisse im Event Log angezeigt" -Type Info
 Write-Log "- Event Viewer: Applications and Services Logs > Microsoft > Windows > CodeIntegrity > Operational" -Type Info
-Write-Log "- Zum Entfernen der Policy: Datei aus CiPolicies\Active\ löschen + Neustart" -Type Info
+Write-Log "- Zum Entfernen der Policy: Datei aus CiPolicies\Active\ loeschen + Neustart" -Type Info
 
 Write-Log "" -Type Info
 Write-Log "Script beendet" -Type Success
