@@ -511,6 +511,18 @@ function Block-CopilotProtocolHandlers {
     Write-ProgressHelper -Activity "Phase 4b" -Status "Blockiere Protocol Handlers..."
     Write-Log "Blockiere Copilot Protocol Handlers (ms-copilot://)..." "INFO"
 
+    # Erstelle HKCR: PSDrive falls nicht vorhanden
+    if (-not (Test-Path "HKCR:")) {
+        try {
+            New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT -ErrorAction Stop | Out-Null
+            Write-Log "HKCR: PSDrive erstellt" "INFO"
+        }
+        catch {
+            Write-Log "HKCR: PSDrive Erstellung fehlgeschlagen - $($_.Exception.Message)" "ERROR"
+            return
+        }
+    }
+
     # Protocol Handler Registry Keys
     $ProtocolHandlers = @(
         'HKCR:\ms-copilot',
