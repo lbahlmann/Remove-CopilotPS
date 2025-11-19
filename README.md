@@ -1,14 +1,22 @@
-# Microsoft Copilot Removal Toolkit v2.1.2
+# Microsoft Copilot Removal Toolkit v2.1.3
 
 Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11 Systemen.
 
 **Status:** ✅ Production Ready
-**Version:** 2.1.2 (November 2025)
+**Version:** 2.1.3 (November 2025)
 **License:** MIT
 
 ---
 
-## 🆕 Neu in v2.1.2
+## 🆕 Neu in v2.1.3
+
+✅ **Provisioned Package Removal** - Verhindert automatische Installation für neue Windows-User
+✅ **Deprovisioned Registry Keys** - Blockiert Neuinstallation durch Feature Updates
+✅ **Protocol Handler Blockierung** - ms-copilot:// und ms-windows-ai-copilot:// deaktiviert
+✅ **Store Auto-Update Blockierung** - Verhindert Microsoft Store Reinstallation (Store bleibt funktional)
+✅ **AppLocker Enhanced** - 5 Deny Rules (Publisher + Path Rules)
+
+## Neu in v2.1.2
 
 ✅ **Microsoft 365 Copilot Blockierung** - Vollständige Deaktivierung in Word, Excel, PowerPoint, Outlook, OneNote
 ✅ **Per-Application Controls** - Granulare Kontrolle für jede Office-Anwendung
@@ -21,7 +29,6 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 ✅ **Custom Backup-Verzeichnis** - BackupDir-Parameter für Netzwerk-Backups
 ✅ **Domain-Sicherheit** - NoGPUpdate-Parameter verhindert GPO-Überschreibung
 ✅ **Performance-Optimierung** - Registry-Operationen 75% schneller
-✅ **English Version** - Vollständig englische Version (Encoding-Fix)
 ✅ **33 Registry-Einstellungen** - Erweiterte Copilot-Blockierung (inkl. M365 Copilot)
 ✅ **6 DNS-Domains** - Gezielte Copilot-Domain-Blockierung
 
@@ -38,7 +45,8 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 | **1-Run-CopilotRemoval-Test.cmd** | Starter-Script (Testmodus) | ✅ Produktiv |
 | **2-Run-CopilotRemoval-Production.cmd** | Starter-Script (Produktiv) | ✅ Produktiv |
 
-📖 **[Vollständige Deployment-Dokumentation](DEPLOYMENT-GUIDE.md)**
+📖 **<a href="DEPLOYMENT-GUIDE.md" target="_blank">Vollständige Deployment-Dokumentation</a>**
+📖 **<a href="GPO-DEPLOYMENT-GUIDE.md" target="_blank">GPO & Intune Deployment Guide</a>**
 
 ---
 
@@ -70,16 +78,16 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 
 ### 10-Phasen-Strategie
 
-1. **App-Paket Entfernung** - AppX-Pakete & provisionierte Pakete
-2. **Registry-Konfiguration** - 33 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features)
-3. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
-4. **AppLocker-Regeln** - Neuinstallation verhindern (Pro/Enterprise)
-5. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
-6. **Scheduled Tasks** - AI-Tasks deaktivieren
-7. **Firewall-Regeln** - Netzwerk-Blockierung
-8. **GPO-Update** - Gruppenrichtlinien aktualisieren (optional)
-9. **Verifizierung** - Automatische Überprüfung
-10. **Bereinigung** - Report erstellen & Optional Explorer-Neustart
+1. **App-Paket Entfernung** - AppX-Pakete (installiert & provisioniert)
+2. **Deprovisioned Keys** - Feature Update Reinstallation Prevention ✨ NEU v2.1.3
+3. **Registry-Konfiguration** - 33 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features)
+4. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
+5. **AppLocker-Regeln** - 5 Deny Rules (Publisher + Path) ✨ NEU v2.1.3
+6. **Protocol Handler** - ms-copilot:// blockiert ✨ NEU v2.1.3
+7. **Store Auto-Update** - Copilot-Pakete blockiert ✨ NEU v2.1.3
+8. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
+9. **Scheduled Tasks** - AI-Tasks deaktivieren
+10. **Firewall-Regeln** - Netzwerk-Blockierung
 
 ### Parameter
 
@@ -144,6 +152,24 @@ $env:LOCALAPPDATA\CopilotRemoval\Backup_YYYYMMDD_HHMMSS\
 
 **Rollback:** Doppelklick auf `.reg` Datei → Import bestätigen → Neustart
 
+### Reinstallation Prevention (v2.1.3)
+
+✅ **5 Schutz-Ebenen gegen Neuinstallation:**
+
+1. **Provisioned Package Removal** - Entfernt AppX Provisioned Packages
+2. **Deprovisioned Registry Keys** - Feature Update Reinstallation blockiert
+3. **AppLocker Rules** - Application-Level Enforcement (5 Rules)
+4. **Protocol Handler Blocking** - ms-copilot:// deaktiviert
+5. **Store Auto-Update Blocking** - Microsoft Store Reinstallation verhindert
+
+### Features v2.1.3
+
+✨ **Provisioned Package Removal** - 5 Package Family Names deprovisioned
+✨ **Deprovisioned Registry Keys** - HKLM:\\...\\Appx\\AppxAllUserStore\\Deprovisioned
+✨ **Protocol Handler Blockierung** - 3 Handler (ms-copilot, microsoft-edge-holographic, ms-windows-ai-copilot)
+✨ **Store Auto-Update Blockierung** - BlockedPackages Registry (Store bleibt funktional!)
+✨ **AppLocker Enhanced** - 3x FilePublisher + 2x FilePath Rules
+
 ### Features v2.1.2
 
 ✅ **Microsoft 365 Copilot** - Vollständig blockiert in Word, Excel, PowerPoint, Outlook, OneNote
@@ -164,13 +190,15 @@ $env:LOCALAPPDATA\CopilotRemoval\Backup_YYYYMMDD_HHMMSS\
 ### Überprüfungen
 
 ✅ App-Pakete (installiert & provisioniert)
-✅ Registry-Einstellungen (HKLM & HKCU, inkl. v2.1 Features)
+✅ Registry-Einstellungen (HKLM & HKCU, inkl. v2.1.2/2.1.3 Features)
 ✅ Kontextmenü-Blockierung
 ✅ Hosts-Datei Einträge
 ✅ Firewall-Regeln
 ✅ Scheduled Tasks
 ✅ Office Connected Experiences
-✅ **Microsoft 365 Copilot** (Word, Excel, PowerPoint, Outlook, OneNote) - NEU in v2.1.2
+✅ **Microsoft 365 Copilot** (Word, Excel, PowerPoint, Outlook, OneNote)
+✅ **Deprovisioned Keys** ✨ NEU v2.1.3
+✅ **Protocol Handler** ✨ NEU v2.1.3
 
 ### Parameter
 
@@ -292,7 +320,8 @@ Detection: Detect-CopilotRemoval.ps1
 2-Run-CopilotRemoval-Production.cmd
 ```
 
-📖 **[Detaillierte Deployment-Anleitung](DEPLOYMENT-GUIDE.md)**
+📖 **<a href="DEPLOYMENT-GUIDE.md" target="_blank">Detaillierte Deployment-Anleitung</a>**
+📖 **<a href="GPO-DEPLOYMENT-GUIDE.md" target="_blank">GPO & Intune Deployment Guide</a>**
 
 ---
 
@@ -300,14 +329,15 @@ Detection: Detect-CopilotRemoval.ps1
 
 ```
 copilot-removal-toolkit/
-├── Remove-CopilotComplete.ps1          # Main script v2.1.2
-├── Test-CopilotPresence.ps1            # Monitoring script
-├── Detect-CopilotRemoval.ps1           # SCCM/Intune detection
-├── Enable-WDACCopilotBlock.ps1         # WDAC blocking (optional)
+├── Remove-CopilotComplete.ps1          # Main script v2.1.3
+├── Test-CopilotPresence.ps1            # Monitoring script v1.1
+├── Detect-CopilotRemoval.ps1           # SCCM/Intune detection v1.1
+├── Enable-WDACCopilotBlock.ps1         # WDAC blocking v1.0
 ├── 1-Run-CopilotRemoval-Test.cmd       # Starter (test mode)
 ├── 2-Run-CopilotRemoval-Production.cmd # Starter (production)
 ├── README.md                           # This file
 ├── DEPLOYMENT-GUIDE.md                 # Deployment guide
+├── GPO-DEPLOYMENT-GUIDE.md             # GPO/Intune guide
 ├── LICENSE                             # MIT License
 └── .gitignore                          # Git ignore rules
 ```
@@ -330,13 +360,51 @@ copilot-removal-toolkit/
 ✅ **DSGVO-konform** - Verhindert ungewollte Datenübertragung
 ✅ **Dokumentiert** - Alle Änderungen werden geloggt
 ✅ **Rollback** - Jederzeit rückgängig machbar
-✅ **Getestet** - Windows 10 22H2, Windows 11 24H2
+✅ **Getestet** - Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26200
+
+---
+
+## 📖 Offizielle Microsoft-Dokumentation
+
+**Windows Copilot:**
+- <a href="https://learn.microsoft.com/en-us/windows/client-management/manage-windows-copilot" target="_blank">Microsoft Learn - Manage Windows Copilot</a>
+- <a href="https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-windowsai" target="_blank">Microsoft Learn - WindowsAI Policy CSP</a>
+
+**AppLocker:**
+- <a href="https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/create-a-rule-for-packaged-apps" target="_blank">Microsoft Learn - Create a rule for packaged apps</a>
+- <a href="https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/manage-packaged-apps-with-applocker" target="_blank">Microsoft Learn - Manage packaged apps with AppLocker</a>
+
+**Microsoft 365 Copilot:**
+- <a href="https://support.microsoft.com/en-us/office/turn-off-copilot-in-microsoft-365-apps-bc7e530b-152d-4123-8e78-edc06f8b85f1" target="_blank">Microsoft Support - Turn off Copilot in M365 Apps</a>
+- <a href="https://learn.microsoft.com/en-us/copilot/microsoft-365/microsoft-365-copilot-app-admin-settings" target="_blank">Microsoft Learn - M365 Copilot app settings for IT admins</a>
 
 ---
 
 ## 📝 Changelog
 
-### v2.1.2 (November 2025) - Current
+### v2.1.3 (November 2025) - Current
+
+**Reinstallation Prevention:**
+- ✨ **Provisioned Package Removal** - Verhindert Installation für neue Windows-User
+- ✨ **Deprovisioned Registry Keys** - Feature Update Reinstallation blockiert (5 Package Family Names)
+- ✨ **AppLocker Enhanced** - 5 Deny Rules (3x FilePublisher + 2x FilePath)
+- ✨ **Protocol Handler Blocking** - ms-copilot://, microsoft-edge-holographic://, ms-windows-ai-copilot://
+- ✨ **Store Auto-Update Blocking** - 5 Copilot-Pakete blockiert (Store bleibt funktional!)
+
+**Technische Details:**
+- 📊 Phase 1b: Create-DeprovisionedKeys() - HKLM Registry
+- 📊 Phase 4: AppLocker XML-Policy mit Merge-Modus
+- 📊 Phase 4b: Block-CopilotProtocolHandlers() - HKCR Registry
+- 📊 Phase 4c: Block-CopilotStoreAutoUpdate() - BlockedPackages Registry
+- 🐛 Hotfix 1: HKCR PSDrive creation (verhindert "Laufwerk nicht gefunden" Fehler)
+
+**Statistik:**
+- +250 Zeilen Code
+- 3 neue Funktionen
+- 3 neue Phasen (1b, 4b, 4c)
+- 5 Reinstallations-Vektoren blockiert
+
+### v2.1.2 (November 2025)
 
 **Neue Features:**
 - ✨ **Microsoft 365 Copilot Blockierung** - Vollständige Deaktivierung in Office-Anwendungen
@@ -399,11 +467,14 @@ copilot-removal-toolkit/
 
 **License:** MIT License
 
-**Documentation:** See [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)
+**Documentation:**
+- <a href="README.md" target="_blank">README.md</a> - This file
+- <a href="DEPLOYMENT-GUIDE.md" target="_blank">DEPLOYMENT-GUIDE.md</a> - Deployment guide
+- <a href="GPO-DEPLOYMENT-GUIDE.md" target="_blank">GPO-DEPLOYMENT-GUIDE.md</a> - GPO/Intune guide
 
 ---
 
-**Letztes Update:** November 2025 (v2.1.2)
+**Letztes Update:** November 2025 (v2.1.3)
 **Status:** ✅ Production Ready
-**Getestet auf:** Windows 10 22H2, Windows 11 24H2
-**Neu:** Microsoft 365 Copilot vollständig blockiert
+**Getestet auf:** Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26200
+**Neu:** Reinstallation Prevention (5 Schutz-Ebenen)
