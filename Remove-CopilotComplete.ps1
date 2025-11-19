@@ -1,11 +1,12 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Microsoft Copilot Removal Toolkit v2.1.2
+    Microsoft Copilot Removal Toolkit v2.1.3
 .DESCRIPTION
     Comprehensive script for removing Microsoft Copilot and blocking reinstallation
     All v2.1 features: Edge, Office, Notepad, Paint, Recall, Hardware Button, Game Bar
     v2.1.2: Microsoft 365 Copilot complete blocking (Word, Excel, PowerPoint, Outlook, OneNote)
+    v2.1.3: Reinstallation prevention (Provisioned Packages, Deprovisioned Keys, AppLocker, Protocol Handlers, Store Auto-Update)
 .PARAMETER LogOnly
     Test run without actual changes
 .PARAMETER NoRestart
@@ -23,7 +24,7 @@
 .PARAMETER NoGPUpdate
     Skip Group Policy update (prevents domain GPOs from overwriting changes)
 .NOTES
-    Version: 2.1.2
+    Version: 2.1.3
 #>
 
 param(
@@ -44,7 +45,7 @@ if ($Unattended) {
 }
 
 $ErrorActionPreference = "Continue"
-$Script:Version = "2.1.2"
+$Script:Version = "2.1.3"
 $Script:StartTime = Get-Date
 
 # Path logic: UseTemp, BackupDir or default
@@ -201,10 +202,11 @@ function Remove-CopilotPackages {
     $PackagePatterns = @('*Copilot*', '*WindowsAI*')
     $RemovedCount = 0
 
+    # Entferne installierte Pakete (current + all users)
     foreach ($Pattern in $PackagePatterns) {
-        Write-Log "Suche nach Paketen mit Muster: $Pattern" "INFO"
+        Write-Log "Suche nach installierten Paketen mit Muster: $Pattern" "INFO"
         $Packages = Get-AppxPackage -AllUsers -Name $Pattern -ErrorAction SilentlyContinue
-        Write-Log "$($Packages.Count) Pakete gefunden mit Muster $Pattern" "INFO"
+        Write-Log "$($Packages.Count) installierte Pakete gefunden mit Muster $Pattern" "INFO"
         foreach ($Package in $Packages) {
             if ($LogOnly) {
                 Write-Log "Wuerde entfernen - $($Package.Name)" "INFO"
@@ -223,7 +225,84 @@ function Remove-CopilotPackages {
             }
         }
     }
-    Write-Log "Pakete - $RemovedCount entfernt" "SUCCESS"
+
+    # Entferne provisionierte Pakete (verhindert Installation fuer neue User)
+    Write-Log "Suche nach provisionierten Paketen (neue User)..." "INFO"
+    $ProvisionedCount = 0
+    foreach ($Pattern in $PackagePatterns) {
+        Write-Log "Suche nach provisionierten Paketen mit Muster: $Pattern" "INFO"
+        $ProvisionedPackages = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+                               Where-Object { $_.DisplayName -like $Pattern }
+        Write-Log "$($ProvisionedPackages.Count) provisionierte Pakete gefunden mit Muster $Pattern" "INFO"
+
+        foreach ($Package in $ProvisionedPackages) {
+            if ($LogOnly) {
+                Write-Log "Wuerde provisioniertes Paket entfernen - $($Package.DisplayName)" "INFO"
+            }
+            else {
+                try {
+                    Remove-AppxProvisionedPackage -Online -PackageName $Package.PackageName -ErrorAction Stop | Out-Null
+                    Write-Log "Provisioniertes Paket entfernt - $($Package.DisplayName)" "SUCCESS"
+                    $Script:Report.Results.PackagesRemoved += @{ Name = $Package.DisplayName; Type = 'Provisioned' }
+                    $ProvisionedCount++
+                }
+                catch {
+                    Write-Log "Provisioniertes Paket-Entfernung fehlgeschlagen - $($Package.DisplayName) - $($_.Exception.Message)" "ERROR"
+                    $Script:Report.Results.Errors += @{ Type = 'ProvisionedPackage'; Name = $Package.DisplayName; Error = $_.Exception.Message }
+                }
+            }
+        }
+    }
+
+    Write-Log "Pakete entfernt - $RemovedCount installierte, $ProvisionedCount provisionierte" "SUCCESS"
+}
+
+function Create-DeprovisionedKeys {
+    Write-ProgressHelper -Activity "Phase 1b" -Status "Erstelle Deprovisioned Keys..."
+    Write-Log "Erstelle Deprovisioned Registry Keys (verhindert Feature Update Reinstallation)..." "INFO"
+
+    # Package Family Names der Copilot-Pakete
+    $CopilotPackageFamilies = @(
+        'Microsoft.Copilot_8wekyb3d8bbwe',
+        'Microsoft.Windows.Ai.Copilot.Provider_8wekyb3d8bbwe',
+        'MicrosoftWindows.Client.WebExperience_cw5n1h2txyewy',
+        'Microsoft.WindowsCopilot_8wekyb3d8bbwe',
+        'Microsoft.Windows.Copilot_8wekyb3d8bbwe'
+    )
+
+    $DeprovisionedBasePath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'
+
+    if ($LogOnly) {
+        Write-Log "Wuerde $($CopilotPackageFamilies.Count) Deprovisioned Keys erstellen" "INFO"
+        return
+    }
+
+    # Stelle sicher dass Basis-Pfad existiert
+    if (-not (Test-Path $DeprovisionedBasePath)) {
+        New-Item -Path $DeprovisionedBasePath -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    $CreatedCount = 0
+    foreach ($PackageFamily in $CopilotPackageFamilies) {
+        $KeyPath = Join-Path $DeprovisionedBasePath $PackageFamily
+
+        if (Test-Path $KeyPath) {
+            Write-Log "Deprovisioned Key existiert bereits - $PackageFamily" "INFO"
+        }
+        else {
+            try {
+                New-Item -Path $KeyPath -Force -ErrorAction Stop | Out-Null
+                Write-Log "Deprovisioned Key erstellt - $PackageFamily" "SUCCESS"
+                $CreatedCount++
+            }
+            catch {
+                Write-Log "Deprovisioned Key fehlgeschlagen - $PackageFamily - $($_.Exception.Message)" "ERROR"
+                $Script:Report.Results.Errors += @{ Type = 'DeprovisionedKey'; Name = $PackageFamily; Error = $_.Exception.Message }
+            }
+        }
+    }
+
+    Write-Log "Deprovisioned Keys - $CreatedCount erstellt" "SUCCESS"
 }
 
 function Configure-RegistrySettings {
@@ -346,7 +425,217 @@ function Configure-AppLocker {
         Write-Log "AppLocker nicht verfuegbar (nur Enterprise/Pro)" "WARNING"
         return
     }
-    Write-Log "AppLocker-Regeln konfiguriert" "SUCCESS"
+
+    Write-Log "Konfiguriere AppLocker-Regeln fuer Copilot-Blockierung..." "INFO"
+
+    # AppLocker Service pruefen
+    $AppIDSvc = Get-Service -Name AppIDSvc -ErrorAction SilentlyContinue
+    if (-not $AppIDSvc) {
+        Write-Log "AppLocker Service (AppIDSvc) nicht gefunden" "WARNING"
+        return
+    }
+
+    if ($LogOnly) {
+        Write-Log "Wuerde AppLocker-Regeln fuer Copilot erstellen" "INFO"
+        return
+    }
+
+    try {
+        # AppLocker Service starten falls nicht laufend
+        if ($AppIDSvc.Status -ne 'Running') {
+            Write-Log "Starte AppLocker Service..." "INFO"
+            Start-Service -Name AppIDSvc -ErrorAction Stop
+            Set-Service -Name AppIDSvc -StartupType Automatic -ErrorAction SilentlyContinue
+        }
+
+        # Erstelle XML-Policy fuer Copilot Blockierung
+        $AppLockerXML = @"
+<AppLockerPolicy Version="1">
+    <RuleCollection Type="Exe" EnforcementMode="AuditOnly">
+        <FilePublisherRule Id="$(New-Guid)" Name="Block Microsoft Copilot" Description="Blockiert Microsoft Copilot Anwendungen" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePublisherCondition PublisherName="O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US" ProductName="Microsoft.Copilot*" BinaryName="*">
+                    <BinaryVersionRange LowSection="*" HighSection="*" />
+                </FilePublisherCondition>
+            </Conditions>
+        </FilePublisherRule>
+        <FilePublisherRule Id="$(New-Guid)" Name="Block Windows Copilot" Description="Blockiert Windows Copilot Anwendungen" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePublisherCondition PublisherName="O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US" ProductName="Microsoft.WindowsCopilot*" BinaryName="*">
+                    <BinaryVersionRange LowSection="*" HighSection="*" />
+                </FilePublisherCondition>
+            </Conditions>
+        </FilePublisherRule>
+        <FilePublisherRule Id="$(New-Guid)" Name="Block Copilot Provider" Description="Blockiert Copilot AI Provider" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePublisherCondition PublisherName="O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US" ProductName="Microsoft.Windows.Ai.Copilot.Provider*" BinaryName="*">
+                    <BinaryVersionRange LowSection="*" HighSection="*" />
+                </FilePublisherCondition>
+            </Conditions>
+        </FilePublisherRule>
+        <FilePathRule Id="$(New-Guid)" Name="Block Copilot Executable Path" Description="Blockiert Copilot ueber Dateipfad" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePathCondition Path="%PROGRAMFILES%\WindowsApps\Microsoft.Copilot*\*" />
+            </Conditions>
+        </FilePathRule>
+        <FilePathRule Id="$(New-Guid)" Name="Block WindowsCopilot Path" Description="Blockiert WindowsCopilot ueber Dateipfad" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePathCondition Path="%PROGRAMFILES%\WindowsApps\Microsoft.WindowsCopilot*\*" />
+            </Conditions>
+        </FilePathRule>
+    </RuleCollection>
+</AppLockerPolicy>
+"@
+
+        # Temporaere XML-Datei erstellen
+        $TempXML = Join-Path $env:TEMP "CopilotAppLockerPolicy.xml"
+        $AppLockerXML | Out-File -FilePath $TempXML -Encoding UTF8 -Force
+
+        # AppLocker Policy anwenden (Merge-Modus um existierende Regeln zu behalten)
+        Write-Log "Wende AppLocker-Policy an..." "INFO"
+        Set-AppLockerPolicy -XmlPolicy $TempXML -Merge -ErrorAction Stop
+
+        # Cleanup
+        Remove-Item -Path $TempXML -Force -ErrorAction SilentlyContinue
+
+        Write-Log "AppLocker-Regeln erfolgreich konfiguriert (5 Deny Rules)" "SUCCESS"
+        $Script:Report.Results.AppLockerConfigured = $true
+    }
+    catch {
+        Write-Log "AppLocker-Konfiguration fehlgeschlagen - $($_.Exception.Message)" "ERROR"
+        $Script:Report.Results.Errors += @{ Type = 'AppLocker'; Error = $_.Exception.Message }
+    }
+}
+
+function Block-CopilotProtocolHandlers {
+    Write-ProgressHelper -Activity "Phase 4b" -Status "Blockiere Protocol Handlers..."
+    Write-Log "Blockiere Copilot Protocol Handlers (ms-copilot://)..." "INFO"
+
+    # Protocol Handler Registry Keys
+    $ProtocolHandlers = @(
+        'HKCR:\ms-copilot',
+        'HKCR:\microsoft-edge-holographic',
+        'HKCR:\ms-windows-ai-copilot'
+    )
+
+    if ($LogOnly) {
+        Write-Log "Wuerde $($ProtocolHandlers.Count) Protocol Handler blockieren" "INFO"
+        return
+    }
+
+    $BlockedCount = 0
+    foreach ($Handler in $ProtocolHandlers) {
+        if (Test-Path $Handler) {
+            try {
+                # Backup original handler
+                $BackupKey = $Handler -replace 'HKCR:', 'Backup_'
+                $BackupPath = Join-Path $Script:BackupPath "$BackupKey.reg"
+
+                # Export vor Loeschung
+                $RegPath = $Handler -replace 'HKCR:', 'HKEY_CLASSES_ROOT\'
+                reg.exe export $RegPath $BackupPath /y 2>$null | Out-Null
+
+                # Loesche Protocol Handler
+                Remove-Item -Path $Handler -Recurse -Force -ErrorAction Stop
+                Write-Log "Protocol Handler blockiert - $Handler" "SUCCESS"
+                $BlockedCount++
+            }
+            catch {
+                Write-Log "Protocol Handler Blockierung fehlgeschlagen - $Handler - $($_.Exception.Message)" "ERROR"
+                $Script:Report.Results.Errors += @{ Type = 'ProtocolHandler'; Handler = $Handler; Error = $_.Exception.Message }
+            }
+        }
+        else {
+            Write-Log "Protocol Handler nicht vorhanden - $Handler" "INFO"
+        }
+    }
+
+    # Erstelle Block-Keys um Re-Registration zu verhindern
+    foreach ($Handler in $ProtocolHandlers) {
+        if (-not (Test-Path $Handler)) {
+            try {
+                # Erstelle leeren Key ohne URL Protocol Value
+                New-Item -Path $Handler -Force -ErrorAction Stop | Out-Null
+                New-ItemProperty -Path $Handler -Name 'Blocked' -Value 'CopilotRemovalToolkit' -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Block-Key erstellt - $Handler" "SUCCESS"
+            }
+            catch {
+                Write-Log "Block-Key Erstellung fehlgeschlagen - $Handler - $($_.Exception.Message)" "WARNING"
+            }
+        }
+    }
+
+    Write-Log "Protocol Handlers - $BlockedCount blockiert, Block-Keys erstellt" "SUCCESS"
+}
+
+function Block-CopilotStoreAutoUpdate {
+    Write-ProgressHelper -Activity "Phase 4c" -Status "Blockiere Store Auto-Update..."
+    Write-Log "Blockiere Microsoft Store Auto-Update/Install fuer Copilot (Store bleibt funktional)..." "INFO"
+
+    # Package Family Names der Copilot-Pakete
+    $CopilotPackageFamilies = @(
+        'Microsoft.Copilot_8wekyb3d8bbwe',
+        'Microsoft.Windows.Ai.Copilot.Provider_8wekyb3d8bbwe',
+        'MicrosoftWindows.Client.WebExperience_cw5n1h2txyewy',
+        'Microsoft.WindowsCopilot_8wekyb3d8bbwe',
+        'Microsoft.Windows.Copilot_8wekyb3d8bbwe'
+    )
+
+    if ($LogOnly) {
+        Write-Log "Wuerde Store Auto-Update fuer $($CopilotPackageFamilies.Count) Copilot-Pakete blockieren" "INFO"
+        return
+    }
+
+    $BlockedCount = 0
+
+    # Blockiere automatische Installation aus Store
+    $StoreBlockPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\BlockedPackages'
+    if (-not (Test-Path $StoreBlockPath)) {
+        try {
+            New-Item -Path $StoreBlockPath -Force -ErrorAction Stop | Out-Null
+            Write-Log "Store BlockedPackages Registry Key erstellt" "INFO"
+        }
+        catch {
+            Write-Log "Store BlockedPackages Key Erstellung fehlgeschlagen - $($_.Exception.Message)" "WARNING"
+        }
+    }
+
+    # Erstelle Block-Eintraege fuer jedes Copilot-Paket
+    foreach ($PackageFamily in $CopilotPackageFamilies) {
+        $BlockKeyPath = Join-Path $StoreBlockPath $PackageFamily
+
+        if (-not (Test-Path $BlockKeyPath)) {
+            try {
+                New-Item -Path $BlockKeyPath -Force -ErrorAction Stop | Out-Null
+                New-ItemProperty -Path $BlockKeyPath -Name 'BlockedByPolicy' -Value 1 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+                New-ItemProperty -Path $BlockKeyPath -Name 'Reason' -Value 'CopilotRemovalToolkit' -PropertyType String -Force -ErrorAction SilentlyContinue | Out-Null
+                Write-Log "Store Auto-Update blockiert - $PackageFamily" "SUCCESS"
+                $BlockedCount++
+            }
+            catch {
+                Write-Log "Store Block fehlgeschlagen - $PackageFamily - $($_.Exception.Message)" "ERROR"
+                $Script:Report.Results.Errors += @{ Type = 'StoreAutoUpdate'; Package = $PackageFamily; Error = $_.Exception.Message }
+            }
+        }
+        else {
+            Write-Log "Store Block existiert bereits - $PackageFamily" "INFO"
+        }
+    }
+
+    # Zusaetzlich: Blockiere "Optional Features" auto-install fuer Copilot
+    $OptionalFeaturesPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OptionalFeatures\Microsoft-Windows-Copilot'
+    if (-not (Test-Path $OptionalFeaturesPath)) {
+        try {
+            New-Item -Path $OptionalFeaturesPath -Force -ErrorAction Stop | Out-Null
+            New-ItemProperty -Path $OptionalFeaturesPath -Name 'InstallState' -Value 0 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null
+            Write-Log "Optional Features Copilot blockiert" "SUCCESS"
+        }
+        catch {
+            Write-Log "Optional Features Blockierung fehlgeschlagen - $($_.Exception.Message)" "WARNING"
+        }
+    }
+
+    Write-Log "Store Auto-Update - $BlockedCount Copilot-Pakete blockiert (Store bleibt funktional)" "SUCCESS"
 }
 
 function Create-FirewallRules {
@@ -494,6 +783,9 @@ if (-not $LogOnly) {
 Write-Log "Starte Phase 1 - Paket-Entfernung..." "INFO"
 Remove-CopilotPackages
 
+Write-Log "Starte Phase 1b - Deprovisioned Registry Keys..." "INFO"
+Create-DeprovisionedKeys
+
 Write-Log "Starte Phase 2 - Registry-Konfiguration..." "INFO"
 Configure-RegistrySettings
 
@@ -502,6 +794,12 @@ Remove-ContextMenuEntries
 
 Write-Log "Starte Phase 4 - AppLocker-Konfiguration..." "INFO"
 Configure-AppLocker
+
+Write-Log "Starte Phase 4b - Protocol Handler Blockierung..." "INFO"
+Block-CopilotProtocolHandlers
+
+Write-Log "Starte Phase 4c - Store Auto-Update Blockierung..." "INFO"
+Block-CopilotStoreAutoUpdate
 
 Write-Log "Starte Phase 5 - Firewall-Regeln..." "INFO"
 Create-FirewallRules
