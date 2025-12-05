@@ -36,7 +36,8 @@ param(
     [string]$SMTPServer,
     [switch]$CreateScheduledTask,
     [string]$LogPath,
-    [switch]$UseTemp
+    [switch]$UseTemp,
+    [switch]$Force
 )
 
 # Automatische Pfad-Ermittlung (RDS-sicher, ohne Systemordner-Aenderungen)
@@ -402,10 +403,15 @@ function New-MonitoringTask {
     $ExistingTask = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
     if ($ExistingTask) {
         Write-Log "Task existiert bereits: $TaskPath$TaskName" -Type Warning
-        $Overwrite = Read-Host "Ueberschreiben? (J/N)"
-        if ($Overwrite -ne "J" -and $Overwrite -ne "j") {
-            Write-Log "Task-Erstellung abgebrochen" -Type Info
-            return
+        if ($Force) {
+            # Bei -Force: Task automatisch ueberschreiben
+            Write-Log "Force-Modus: Task wird ueberschrieben" -Type Info
+        } else {
+            $Overwrite = Read-Host "Ueberschreiben? (J/N)"
+            if ($Overwrite -ne "J" -and $Overwrite -ne "j") {
+                Write-Log "Task-Erstellung abgebrochen" -Type Info
+                return
+            }
         }
         Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Confirm:$false
     }

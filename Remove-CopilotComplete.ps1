@@ -1,12 +1,13 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Microsoft Copilot Removal Toolkit v2.1.3
+    Microsoft Copilot Removal Toolkit v2.2
 .DESCRIPTION
     Comprehensive script for removing Microsoft Copilot and blocking reinstallation
     All v2.1 features: Edge, Office, Notepad, Paint, Recall, Hardware Button, Game Bar
     v2.1.2: Microsoft 365 Copilot complete blocking (Word, Excel, PowerPoint, Outlook, OneNote)
     v2.1.3: Reinstallation prevention (Provisioned Packages, Deprovisioned Keys, AppLocker, Protocol Handlers, Store Auto-Update)
+    v2.2: Full Unattended mode with Scheduled Task support, HKU iteration for all users
 .PARAMETER LogOnly
     Test run without actual changes
 .PARAMETER NoRestart
@@ -23,8 +24,14 @@
     Custom backup directory
 .PARAMETER NoGPUpdate
     Skip Group Policy update (prevents domain GPOs from overwriting changes)
+.PARAMETER CreateScheduledTask
+    Creates a scheduled task for automatic recurring execution
+.PARAMETER TaskSchedule
+    Schedule for the task: Daily, Weekly (default), or Monthly
+.PARAMETER WithReboot
+    Automatic reboot after execution (only for initial installation)
 .NOTES
-    Version: 2.1.3
+    Version: 2.2
 #>
 
 param(
@@ -35,8 +42,44 @@ param(
     [switch]$Unattended,
     [switch]$UseTemp,
     [string]$BackupDir = "",
-    [switch]$NoGPUpdate
+    [switch]$NoGPUpdate,
+    [switch]$CreateScheduledTask,
+    [ValidateSet('Daily','Weekly','Monthly')]
+    [string]$TaskSchedule = 'Weekly',
+    [switch]$WithReboot
 )
+
+# ========================================
+# SELF-ELEVATION (UAC-Prompt falls noetig)
+# ========================================
+$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $IsAdmin) {
+    Write-Host "Administratorrechte erforderlich - starte UAC-Prompt..." -ForegroundColor Yellow
+
+    # Sammle alle Parameter fuer Neustart
+    $ArgList = @("-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"")
+    if ($LogOnly) { $ArgList += "-LogOnly" }
+    if ($NoRestart) { $ArgList += "-NoRestart" }
+    if ($SkipBackup) { $ArgList += "-SkipBackup" }
+    if ($Force) { $ArgList += "-Force" }
+    if ($Unattended) { $ArgList += "-Unattended" }
+    if ($UseTemp) { $ArgList += "-UseTemp" }
+    if ($BackupDir -ne "") { $ArgList += "-BackupDir"; $ArgList += "`"$BackupDir`"" }
+    if ($NoGPUpdate) { $ArgList += "-NoGPUpdate" }
+    if ($CreateScheduledTask) { $ArgList += "-CreateScheduledTask" }
+    if ($TaskSchedule -ne "Weekly") { $ArgList += "-TaskSchedule"; $ArgList += $TaskSchedule }
+    if ($WithReboot) { $ArgList += "-WithReboot" }
+
+    try {
+        Start-Process PowerShell -ArgumentList $ArgList -Verb RunAs -Wait
+        exit $LASTEXITCODE
+    }
+    catch {
+        Write-Host "Fehler: Administratorrechte wurden verweigert oder abgebrochen." -ForegroundColor Red
+        exit 1
+    }
+}
 
 # Unattended implies Force and NoRestart
 if ($Unattended) {
@@ -44,26 +87,91 @@ if ($Unattended) {
     $NoRestart = $true
 }
 
+# CreateScheduledTask implies Unattended
+if ($CreateScheduledTask) {
+    $Unattended = $true
+    $Force = $true
+    $NoRestart = $true
+}
+
 $ErrorActionPreference = "Continue"
-$Script:Version = "2.1.3"
+$Script:Version = "2.2.1"
+$Script:SecureInstallPath = "$env:ProgramFiles\badata\CopilotRemoval"
 $Script:StartTime = Get-Date
 
-# Path logic: UseTemp, BackupDir or default
-if ($UseTemp) {
-    $BaseDir = "C:\Temp\CopilotRemoval\$env:USERNAME"
+# Execution Context ermitteln (User vs SYSTEM)
+# Hinweis: $ExecutionContext ist reserviert, daher $RunContext
+$Script:RunContext = if ($env:USERNAME -eq "$env:COMPUTERNAME$" -or $env:USERNAME -eq "SYSTEM") {
+    "SYSTEM-Task"
 } else {
-    $BaseDir = "$env:LOCALAPPDATA\CopilotRemoval"
+    "User-$env:USERNAME"
 }
 
-$Script:LogPath = "$BaseDir\Log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-$Script:ReportPath = "$BaseDir\Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').json"
-$Script:TrackingFile = "$env:LOCALAPPDATA\CopilotRemoval\.execution_tracking"
+# Zentrale Log-Location (fuer alle Kontexte gleich, aber unterscheidbar)
+$Timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+# Versuche ProgramData, dann Fallback auf LOCALAPPDATA
+$ProgramDataLogDir = "$env:ProgramData\badata\CopilotRemoval\Logs"
+$LocalAppDataLogDir = "$env:LOCALAPPDATA\badata\CopilotRemoval\Logs"
+
+# Erstelle ProgramData-Verzeichnis (mit allen Elternverzeichnissen)
+$LogDirCreated = $false
+try {
+    Write-Host "[DEBUG] Versuche: $ProgramDataLogDir" -ForegroundColor Gray
+    if (-not (Test-Path $ProgramDataLogDir)) {
+        $null = New-Item -Path $ProgramDataLogDir -ItemType Directory -Force -ErrorAction Stop
+        Write-Host "[DEBUG] Verzeichnis erstellt" -ForegroundColor Gray
+    }
+    # Test ob schreibbar
+    $TestFile = Join-Path $ProgramDataLogDir ".writetest"
+    $null = New-Item -Path $TestFile -ItemType File -Force -ErrorAction Stop
+    Remove-Item -Path $TestFile -Force -ErrorAction SilentlyContinue
+    $Script:CentralLogDir = $ProgramDataLogDir
+    $LogDirCreated = $true
+    Write-Host "[DEBUG] ProgramData OK" -ForegroundColor Green
+} catch {
+    Write-Host "[DEBUG] ProgramData FEHLER: $($_.Exception.Message)" -ForegroundColor Red
+    # Fallback auf LOCALAPPDATA
+    try {
+        Write-Host "[DEBUG] Versuche Fallback: $LocalAppDataLogDir" -ForegroundColor Gray
+        if (-not (Test-Path $LocalAppDataLogDir)) {
+            $null = New-Item -Path $LocalAppDataLogDir -ItemType Directory -Force -ErrorAction Stop
+        }
+        $Script:CentralLogDir = $LocalAppDataLogDir
+        $LogDirCreated = $true
+        Write-Host "[DEBUG] LOCALAPPDATA OK" -ForegroundColor Yellow
+    } catch {
+        Write-Host "[DEBUG] LOCALAPPDATA FEHLER: $($_.Exception.Message)" -ForegroundColor Red
+        # Letzter Fallback: aktuelles Verzeichnis
+        $Script:CentralLogDir = $PSScriptRoot
+        Write-Host "[DEBUG] Fallback auf PSScriptRoot: $PSScriptRoot" -ForegroundColor Red
+    }
+}
+
+$Script:LogPath = "$Script:CentralLogDir\Log_${Timestamp}_$Script:RunContext.txt"
+$Script:ReportPath = "$Script:CentralLogDir\Report_${Timestamp}_$Script:RunContext.json"
+
+# Debug: Zeige Log-Pfad
+Write-Host "[DEBUG] Log-Verzeichnis: $Script:CentralLogDir" -ForegroundColor Cyan
+Write-Host "[DEBUG] Log-Datei: $Script:LogPath" -ForegroundColor Cyan
+
+# Backup und Tracking im gleichen Verzeichnis wie Logs
+$Script:BaseDir = Split-Path $Script:CentralLogDir  # C:\ProgramData\badata\CopilotRemoval
+$Script:TrackingFile = "$Script:BaseDir\.execution_tracking"
+
+# Backup-Unterverzeichnis
+$Script:BackupBaseDir = "$Script:BaseDir\Backups"
+if (-not (Test-Path $Script:BackupBaseDir)) {
+    New-Item -Path $Script:BackupBaseDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+}
 
 if ($BackupDir -ne "") {
-    $Script:BackupPath = "$BackupDir\Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    $Script:BackupPath = "$BackupDir\Backup_$Timestamp"
 } else {
-    $Script:BackupPath = "$BaseDir\Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    $Script:BackupPath = "$Script:BackupBaseDir\Backup_$Timestamp"
 }
+
+Write-Host "[DEBUG] Backup-Verzeichnis: $Script:BackupPath" -ForegroundColor Cyan
 $Script:ProgressCounter = 0
 $Script:TotalSteps = 50
 $Script:Report = @{
@@ -72,6 +180,7 @@ $Script:Report = @{
     Mode = if($LogOnly){'DryRun'}else{'Production'}
     Unattended = $Unattended
     Results = @{
+        ProcessesStopped = 0
         PackagesRemoved = @()
         RegistryChanges = @()
         FirewallRules = @()
@@ -178,13 +287,20 @@ function Get-SystemInfo {
 function Test-AlreadyExecuted {
     if ($Force) { return $false }
     if (Test-Path $Script:TrackingFile) {
-        $Tracking = Get-Content $Script:TrackingFile -Raw | ConvertFrom-Json
-        Write-Log "Script bereits ausgefuehrt am $($Tracking.LastRun)" "WARNING"
-        if (-not $Unattended) {
-            $Response = Read-Host "Trotzdem fortfahren? (J/N)"
-            return ($Response -ne 'J' -and $Response -ne 'j')
+        try {
+            $Tracking = Get-Content $Script:TrackingFile -Raw | ConvertFrom-Json
+            # Pruefe ob gleiche Version bereits ausgefuehrt wurde
+            if ($Tracking.Version -eq $Script:Version) {
+                Write-Log "Script v$($Script:Version) bereits ausgefuehrt am $($Tracking.LastRun) - ueberspringe" "INFO"
+                return $true
+            } else {
+                Write-Log "Neue Version erkannt: v$($Tracking.Version) -> v$($Script:Version) - fuehre Update aus" "INFO"
+                return $false
+            }
+        } catch {
+            Write-Log "TrackingFile beschaedigt, fuehre Script aus" "WARNING"
+            return $false
         }
-        return $true
     }
     return $false
 }
@@ -196,10 +312,341 @@ function Set-ExecutionTracking {
     } | ConvertTo-Json | Out-File $Script:TrackingFile -Encoding UTF8
 }
 
+function Set-RegistryForAllUsers {
+    param(
+        [string]$RegPath,
+        [string]$Name,
+        $Value,
+        [string]$Type = 'DWord'
+    )
+
+    # HKCU-Pfad zu HKU-Pfad konvertieren
+    $HKUPath = $RegPath -replace '^HKCU:\\', ''
+
+    # Alle User-Profile (keine System-Accounts)
+    $UserProfiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+        Where-Object { $_.Special -eq $false -and $_.SID -like 'S-1-5-21-*' }
+
+    $SuccessCount = 0
+    foreach ($Profile in $UserProfiles) {
+        $SID = $Profile.SID
+        $HivePath = "$($Profile.LocalPath)\NTUSER.DAT"
+        $HiveLoaded = $false
+
+        # Pruefen ob Hive bereits geladen (User angemeldet)
+        if (-not (Test-Path "Registry::HKU\$SID")) {
+            # Hive laden fuer abgemeldete User
+            $LoadResult = reg load "HKU\$SID" "$HivePath" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $HiveLoaded = $true
+            } else {
+                Write-Log "HKU-Hive konnte nicht geladen werden fuer SID $SID" "WARNING"
+                continue
+            }
+        }
+
+        # Registry-Wert setzen
+        try {
+            $FullPath = "Registry::HKU\$SID\$HKUPath"
+            if (-not (Test-Path $FullPath)) {
+                New-Item -Path $FullPath -Force -ErrorAction Stop | Out-Null
+            }
+            Set-ItemProperty -Path $FullPath -Name $Name -Value $Value -Type $Type -ErrorAction Stop
+            $SuccessCount++
+        }
+        catch {
+            Write-Log "HKU Registry fehlgeschlagen fuer SID $SID - $($_.Exception.Message)" "WARNING"
+        }
+
+        # Hive entladen wenn wir ihn geladen haben
+        if ($HiveLoaded) {
+            [gc]::Collect()
+            Start-Sleep -Milliseconds 100
+            reg unload "HKU\$SID" 2>&1 | Out-Null
+        }
+    }
+
+    # Default User wird NICHT behandelt - neue User werden vom Scheduled Task erfasst
+
+    return $SuccessCount
+}
+
+function Install-ToSecurePath {
+    Write-Log "Installiere Script in sicheren Pfad: $Script:SecureInstallPath" "INFO"
+
+    if ($LogOnly) {
+        Write-Log "Wuerde Script nach $Script:SecureInstallPath kopieren" "INFO"
+        return $PSCommandPath
+    }
+
+    try {
+        # Ordner erstellen (erbt Program Files-Berechtigungen)
+        if (-not (Test-Path $Script:SecureInstallPath)) {
+            New-Item -Path $Script:SecureInstallPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            Write-Log "Sicherer Ordner erstellt: $Script:SecureInstallPath" "SUCCESS"
+        }
+
+        # Script kopieren
+        $TargetScript = Join-Path $Script:SecureInstallPath "Remove-CopilotComplete.ps1"
+        Copy-Item -Path $PSCommandPath -Destination $TargetScript -Force -ErrorAction Stop
+        Write-Log "Script kopiert nach: $TargetScript" "SUCCESS"
+
+        # Logs-Ordner erstellen
+        $LogsPath = Join-Path $Script:SecureInstallPath "Logs"
+        if (-not (Test-Path $LogsPath)) {
+            New-Item -Path $LogsPath -ItemType Directory -Force | Out-Null
+        }
+
+        # Backups-Ordner erstellen
+        $BackupsPath = Join-Path $Script:SecureInstallPath "Backups"
+        if (-not (Test-Path $BackupsPath)) {
+            New-Item -Path $BackupsPath -ItemType Directory -Force | Out-Null
+        }
+
+        return $TargetScript
+    }
+    catch {
+        Write-Log "Installation in sicheren Pfad fehlgeschlagen: $($_.Exception.Message)" "ERROR"
+        return $PSCommandPath
+    }
+}
+
+function New-CopilotRemovalTask {
+    param(
+        [string]$ScriptPath,
+        [string]$Schedule = 'Weekly'
+    )
+
+    Write-Log "Erstelle Scheduled Task fuer Copilot-Removal ($Schedule)..." "INFO"
+
+    $TaskName = "Copilot-Removal"
+    $TaskPath = "\badata\"
+
+    if ($LogOnly) {
+        Write-Log "Wuerde Scheduled Task erstellen: $TaskPath$TaskName" "INFO"
+        return
+    }
+
+    try {
+        # Pruefe ob Task bereits existiert
+        $ExistingTask = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
+        if ($ExistingTask) {
+            # Pruefe ob aktuelle Version bereits installiert (Description enthaelt Version)
+            $CurrentDesc = $ExistingTask.Description
+            if ($CurrentDesc -like "*v$($Script:Version)*") {
+                Write-Log "Task bereits installiert mit aktueller Version $($Script:Version) - ueberspringe" "INFO"
+                return
+            }
+            Write-Log "Task existiert mit anderer Version, wird geloescht und neu erstellt..." "INFO"
+            # Task loeschen mit schtasks.exe (zuverlaessiger)
+            $null = & schtasks.exe /Delete /TN "$TaskPath$TaskName" /F 2>&1
+            Start-Sleep -Milliseconds 500
+        }
+
+        # PRIMAERE METHODE: Task direkt mit schtasks.exe und XML erstellen
+        # (PowerShell Register-ScheduledTask erstellt Tasks oft als disabled)
+        Write-Log "Erstelle Task mit schtasks.exe (zuverlaessiger als PowerShell)..." "INFO"
+
+        # Trigger-XML basierend auf Schedule
+        $TriggerXML = switch ($Schedule) {
+            'Daily' {
+                Write-Log "Task-Trigger: Taeglich um 06:00" "INFO"
+                @"
+    <CalendarTrigger>
+      <StartBoundary>$(Get-Date -Format 'yyyy-MM-dd')T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>
+    </CalendarTrigger>
+"@
+            }
+            'Weekly' {
+                Write-Log "Task-Trigger: Woechentlich Montag um 06:00" "INFO"
+                @"
+    <CalendarTrigger>
+      <StartBoundary>$(Get-Date -Format 'yyyy-MM-dd')T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByWeek><DaysOfWeek><Monday/></DaysOfWeek><WeeksInterval>1</WeeksInterval></ScheduleByWeek>
+    </CalendarTrigger>
+"@
+            }
+            'Monthly' {
+                Write-Log "Task-Trigger: Monatlich am 1. um 06:00" "INFO"
+                @"
+    <CalendarTrigger>
+      <StartBoundary>$(Get-Date -Format 'yyyy-MM-dd')T06:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByMonth><DaysOfMonth><Day>1</Day></DaysOfMonth><Months><January/><February/><March/><April/><May/><June/><July/><August/><September/><October/><November/><December/></Months></ScheduleByMonth>
+    </CalendarTrigger>
+"@
+            }
+        }
+        Write-Log "Task-Trigger: Zusaetzlich bei Systemstart" "INFO"
+
+        # Komplette Task-XML mit Enabled=true
+        $TaskXML = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Microsoft Copilot Removal Toolkit v$($Script:Version) - Automatische Ausfuehrung ($Schedule)</Description>
+    <URI>$TaskPath$TaskName</URI>
+  </RegistrationInfo>
+  <Triggers>
+$TriggerXML
+    <BootTrigger>
+      <Enabled>true</Enabled>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT5M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-ExecutionPolicy Bypass -WindowStyle Hidden -File "$ScriptPath" -Unattended</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+        # XML temporaer speichern
+        $TempTaskXML = Join-Path $env:TEMP "CopilotRemovalTask_$([guid]::NewGuid().ToString('N').Substring(0,8)).xml"
+        $TaskXML | Out-File -FilePath $TempTaskXML -Encoding Unicode -Force
+        Write-Log "Task-XML erstellt: $TempTaskXML" "INFO"
+
+        # Task mit schtasks.exe erstellen
+        $CreateOutput = & schtasks.exe /Create /TN "$TaskPath$TaskName" /XML "$TempTaskXML" /F 2>&1
+        $CreateExitCode = $LASTEXITCODE
+        Remove-Item -Path $TempTaskXML -Force -ErrorAction SilentlyContinue
+
+        if ($CreateExitCode -ne 0) {
+            Write-Log "schtasks.exe /Create fehlgeschlagen: $CreateOutput" "ERROR"
+            throw "Task-Erstellung fehlgeschlagen"
+        }
+        Write-Log "schtasks.exe /Create erfolgreich" "SUCCESS"
+
+        # Verifiziere Task
+        Start-Sleep -Milliseconds 500
+        $VerifyTask = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
+
+        if ($VerifyTask) {
+            # Task-Status pruefen
+            if ($VerifyTask.State -eq 'Ready') {
+                Write-Log "Task Status: Bereit (Ready) - AKTIVIERT" "SUCCESS"
+            } elseif ($VerifyTask.State -eq 'Disabled') {
+                Write-Log "Task ist noch Disabled trotz XML - versuche schtasks.exe /ENABLE..." "WARNING"
+                $EnableOutput = & schtasks.exe /Change /TN "$TaskPath$TaskName" /ENABLE 2>&1
+                $EnableExitCode = $LASTEXITCODE
+                if ($EnableExitCode -eq 0) {
+                    Write-Log "schtasks.exe /ENABLE erfolgreich" "SUCCESS"
+                } else {
+                    Write-Log "schtasks.exe /ENABLE fehlgeschlagen: $EnableOutput" "ERROR"
+                }
+            } else {
+                Write-Log "Task Status: $($VerifyTask.State)" "INFO"
+            }
+
+            Write-Log "Scheduled Task erfolgreich erstellt: $TaskPath$TaskName" "SUCCESS"
+            $TaskInfo = $VerifyTask | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
+            if ($TaskInfo.NextRunTime) {
+                Write-Log "Naechste Ausfuehrung: $($TaskInfo.NextRunTime)" "INFO"
+            }
+            $Script:Report.ScheduledTaskCreated = $true
+        }
+        else {
+            Write-Log "Task wurde nicht gefunden nach Erstellung!" "ERROR"
+            throw "Task-Verifikation fehlgeschlagen"
+        }
+    }
+    catch {
+        Write-Log "Scheduled Task Erstellung fehlgeschlagen: $($_.Exception.Message)" "ERROR"
+        $Script:Report.Results.Errors += @{ Type = 'ScheduledTask'; Error = $_.Exception.Message }
+    }
+}
+
+function Stop-CopilotProcesses {
+    Write-ProgressHelper -Activity "Phase 0" -Status "Beende Copilot-Prozesse..."
+    Write-Log "Beende laufende Copilot-Prozesse..." "INFO"
+
+    # Prozessnamen die beendet werden sollen (Wildcards unterstuetzt)
+    # WebViewHost = Microsoft 365 Copilot App (MicrosoftOfficeHub)
+    $ProcessPatterns = @(
+        'Copilot*',
+        'CopilotRuntime*',
+        'Microsoft.Copilot*',
+        'AIHost*',
+        'Windows.AI*',
+        'WebExperience*',
+        'MicrosoftOfficeHub*',
+        'WebViewHost*'
+    )
+
+    $StoppedCount = 0
+    foreach ($Pattern in $ProcessPatterns) {
+        $Processes = Get-Process -Name $Pattern -ErrorAction SilentlyContinue
+        foreach ($Process in $Processes) {
+            if ($LogOnly) {
+                Write-Log "Wuerde beenden - $($Process.Name) (PID: $($Process.Id))" "INFO"
+                $StoppedCount++
+            }
+            else {
+                try {
+                    $ProcessName = $Process.Name
+                    $ProcessId = $Process.Id
+                    Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+                    Write-Log "Prozess beendet - $ProcessName (PID: $ProcessId)" "SUCCESS"
+                    $StoppedCount++
+                }
+                catch {
+                    Write-Log "Prozess konnte nicht beendet werden - $($Process.Name): $($_.Exception.Message)" "WARNING"
+                }
+            }
+        }
+    }
+
+    if ($StoppedCount -eq 0) {
+        Write-Log "Keine laufenden Copilot-Prozesse gefunden" "INFO"
+    }
+    else {
+        Write-Log "Prozesse beendet - $StoppedCount Prozesse" "SUCCESS"
+        # Kurz warten damit Prozesse sauber beendet werden
+        Start-Sleep -Seconds 2
+    }
+
+    $Script:Report.Results.ProcessesStopped = $StoppedCount
+}
+
 function Remove-CopilotPackages {
     Write-ProgressHelper -Activity "Phase 1" -Status "Entferne Pakete..."
     Write-Log "Suche nach Copilot-Paketen (kann 30-60 Sekunden dauern)..." "INFO"
-    $PackagePatterns = @('*Copilot*', '*WindowsAI*')
+    # MicrosoftOfficeHub = "Microsoft 365 Copilot" App (nur Launcher, nicht Office selbst)
+    $PackagePatterns = @('*Copilot*', '*WindowsAI*', '*WebExperience*', '*MicrosoftOfficeHub*')
     $RemovedCount = 0
 
     # Entferne installierte Pakete (current + all users)
@@ -267,7 +714,8 @@ function Create-DeprovisionedKeys {
         'Microsoft.Windows.Ai.Copilot.Provider_8wekyb3d8bbwe',
         'MicrosoftWindows.Client.WebExperience_cw5n1h2txyewy',
         'Microsoft.WindowsCopilot_8wekyb3d8bbwe',
-        'Microsoft.Windows.Copilot_8wekyb3d8bbwe'
+        'Microsoft.Windows.Copilot_8wekyb3d8bbwe',
+        'Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe'
     )
 
     $DeprovisionedBasePath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\Deprovisioned'
@@ -373,17 +821,47 @@ function Configure-RegistrySettings {
     }
     Write-Log "Backup abgeschlossen, wende Registry-Einstellungen an..." "INFO"
 
+    # Trenne HKLM und HKCU Einstellungen
+    $HKLMSettings = $RegistrySettings | Where-Object { $_.Path -like 'HKLM:*' }
+    $HKCUSettings = $RegistrySettings | Where-Object { $_.Path -like 'HKCU:*' }
+
+    Write-Log "Registry-Einstellungen: $($HKLMSettings.Count) HKLM, $($HKCUSettings.Count) HKCU" "INFO"
+
     $SuccessCount = 0
     $CurrentKey = 0
-    foreach ($Setting in $RegistrySettings) {
+
+    # HKLM-Einstellungen (systemweit)
+    Write-Log "Setze HKLM-Einstellungen (systemweit)..." "INFO"
+    foreach ($Setting in $HKLMSettings) {
         $CurrentKey++
-        # Progress alle 5 Keys aktualisieren um Flackern zu reduzieren
         if ($CurrentKey % 5 -eq 0) {
-            Write-ProgressHelper -Activity "Phase 2" -Status "Setze Registry ($CurrentKey/$($RegistrySettings.Count))..."
+            Write-ProgressHelper -Activity "Phase 2" -Status "Setze HKLM Registry ($CurrentKey/$($HKLMSettings.Count))..."
         }
         if (Set-RegistryValue @Setting -SkipBackup) { $SuccessCount++ }
     }
-    Write-Log "Registry - $SuccessCount/$($RegistrySettings.Count) gesetzt" "SUCCESS"
+
+    # HKCU-Einstellungen (fuer alle User via HKU)
+    Write-Log "Setze HKCU-Einstellungen (alle User via HKU)..." "INFO"
+    $HKCUSuccessCount = 0
+    foreach ($Setting in $HKCUSettings) {
+        $CurrentKey++
+        if ($CurrentKey % 5 -eq 0) {
+            Write-ProgressHelper -Activity "Phase 2" -Status "Setze HKU Registry ($CurrentKey/$($RegistrySettings.Count))..."
+        }
+        if ($LogOnly) {
+            Write-Log "Wuerde setzen (alle User) - $($Setting.Path)\$($Setting.Name) = $($Setting.Value)" "INFO"
+            $HKCUSuccessCount++
+        } else {
+            $UserCount = Set-RegistryForAllUsers -RegPath $Setting.Path -Name $Setting.Name -Value $Setting.Value
+            if ($UserCount -gt 0) {
+                $HKCUSuccessCount++
+                $Script:Report.Results.RegistryChanges += @{ Path = $Setting.Path; Name = $Setting.Name; Value = $Setting.Value; Users = $UserCount }
+            }
+        }
+    }
+    $SuccessCount += $HKCUSuccessCount
+
+    Write-Log "Registry - $SuccessCount/$($RegistrySettings.Count) gesetzt (HKLM: $($HKLMSettings.Count), HKCU alle User: $HKCUSuccessCount)" "SUCCESS"
 }
 
 function Remove-ContextMenuEntries {
@@ -483,6 +961,18 @@ function Configure-AppLocker {
                 <FilePathCondition Path="%PROGRAMFILES%\WindowsApps\Microsoft.WindowsCopilot*\*" />
             </Conditions>
         </FilePathRule>
+        <FilePublisherRule Id="$(New-Guid)" Name="Block WebExperience (Copilot)" Description="Blockiert Windows Client WebExperience (Copilot Integration)" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePublisherCondition PublisherName="O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US" ProductName="MicrosoftWindows.Client.WebExperience*" BinaryName="*">
+                    <BinaryVersionRange LowSection="*" HighSection="*" />
+                </FilePublisherCondition>
+            </Conditions>
+        </FilePublisherRule>
+        <FilePathRule Id="$(New-Guid)" Name="Block WebExperience Path" Description="Blockiert WebExperience ueber Dateipfad" UserOrGroupSid="S-1-1-0" Action="Deny">
+            <Conditions>
+                <FilePathCondition Path="%PROGRAMFILES%\WindowsApps\MicrosoftWindows.Client.WebExperience*\*" />
+            </Conditions>
+        </FilePathRule>
     </RuleCollection>
 </AppLockerPolicy>
 "@
@@ -498,7 +988,7 @@ function Configure-AppLocker {
         # Cleanup
         Remove-Item -Path $TempXML -Force -ErrorAction SilentlyContinue
 
-        Write-Log "AppLocker-Regeln erfolgreich konfiguriert (5 Deny Rules)" "SUCCESS"
+        Write-Log "AppLocker-Regeln erfolgreich konfiguriert (7 Deny Rules)" "SUCCESS"
         $Script:Report.Results.AppLockerConfigured = $true
     }
     catch {
@@ -590,7 +1080,8 @@ function Block-CopilotStoreAutoUpdate {
         'Microsoft.Windows.Ai.Copilot.Provider_8wekyb3d8bbwe',
         'MicrosoftWindows.Client.WebExperience_cw5n1h2txyewy',
         'Microsoft.WindowsCopilot_8wekyb3d8bbwe',
-        'Microsoft.Windows.Copilot_8wekyb3d8bbwe'
+        'Microsoft.Windows.Copilot_8wekyb3d8bbwe',
+        'Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe'
     )
 
     if ($LogOnly) {
@@ -690,11 +1181,15 @@ function Disable-CopilotTasks {
     Write-ProgressHelper -Activity "Phase 6" -Status "Deaktiviere Tasks..."
     Write-Log "Suche nach geplanten Tasks (kann 10-20 Sekunden dauern)..." "INFO"
     $TaskPatterns = @('*Copilot*', '*WindowsAI*')
+    # WICHTIG: Eigenen Task ausschliessen (sonst deaktiviert sich das Script selbst!)
+    $ExcludedTasks = @('Copilot-Removal')
     $DisabledCount = 0
 
     foreach ($Pattern in $TaskPatterns) {
         Write-Log "Suche nach Tasks mit Muster: $Pattern" "INFO"
-        $Tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like $Pattern }
+        $Tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+            $_.TaskName -like $Pattern -and $_.TaskName -notin $ExcludedTasks
+        }
         Write-Log "$($Tasks.Count) Tasks gefunden mit Muster $Pattern" "INFO"
         foreach ($Task in $Tasks) {
             if ($LogOnly) {
@@ -717,6 +1212,8 @@ function Test-CopilotRemoval {
     $RemainingPackages = @()
     $RemainingPackages += Get-AppxPackage -AllUsers -Name '*Copilot*' -ErrorAction SilentlyContinue
     $RemainingPackages += Get-AppxPackage -AllUsers -Name '*WindowsAI*' -ErrorAction SilentlyContinue
+    $RemainingPackages += Get-AppxPackage -AllUsers -Name '*WebExperience*' -ErrorAction SilentlyContinue
+    $RemainingPackages += Get-AppxPackage -AllUsers -Name '*MicrosoftOfficeHub*' -ErrorAction SilentlyContinue
     Write-Log "Verifikations-Scan abgeschlossen - $($RemainingPackages.Count) Copilot-Pakete gefunden" "INFO"
     $HostsFile = "$env:SystemRoot\System32\drivers\etc\hosts"
     $HostsContent = Get-Content $HostsFile -ErrorAction SilentlyContinue
@@ -791,6 +1288,9 @@ if (Test-AlreadyExecuted) {
 if (-not $LogOnly) {
     Initialize-Backup | Out-Null
 }
+
+Write-Log "Starte Phase 0 - Prozess-Beendigung..." "INFO"
+Stop-CopilotProcesses
 
 Write-Log "Starte Phase 1 - Paket-Entfernung..." "INFO"
 Remove-CopilotPackages
@@ -896,6 +1396,13 @@ Write-Log "Pruefe ob Explorer-Neustart noetig ist..." "INFO"
 Restart-Explorer
 Write-Log "Explorer-Neustart-Pruefung abgeschlossen" "INFO"
 
+# Scheduled Task erstellen falls angefordert
+if ($CreateScheduledTask) {
+    Write-Log "=== Scheduled Task Installation ===" "INFO"
+    $InstalledScriptPath = Install-ToSecurePath
+    New-CopilotRemovalTask -ScriptPath $InstalledScriptPath -Schedule $TaskSchedule
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "Script abgeschlossen" -ForegroundColor Green
@@ -915,7 +1422,17 @@ if (-not $SkipBackup -and -not $LogOnly) {
 }
 Write-Host ""
 
-if (-not $NoRestart -and -not $LogOnly -and -not $Unattended) {
+# Reboot-Logik
+if ($WithReboot -and -not $LogOnly) {
+    # Automatischer Reboot bei -WithReboot Parameter
+    Write-Log "Automatischer Neustart angefordert (-WithReboot)" "INFO"
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "System wird in 60 Sekunden neu gestartet..." -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    shutdown /r /t 60 /c "Copilot-Entfernung abgeschlossen. Neustart in 60 Sekunden."
+} elseif (-not $NoRestart -and -not $LogOnly -and -not $Unattended) {
+    # Interaktive Nachfrage nur wenn nicht Unattended
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Yellow
     Write-Host "Ein System-Neustart wird empfohlen damit alle Aenderungen wirksam werden." -ForegroundColor Yellow

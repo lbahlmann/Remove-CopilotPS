@@ -1,36 +1,46 @@
-# Microsoft Copilot Removal Toolkit v2.1.3
+# Microsoft Copilot Removal Toolkit v2.2.1
 
 Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11 Systemen.
 
 **Status:** ✅ Production Ready
-**Version:** 2.1.3 (November 2025)
+**Version:** 2.2.1 (Dezember 2025)
 **License:** MIT
 
 ---
 
-## 🆕 Neu in v2.1.3
+## 🆕 Neu in v2.2.1 (Hotfix)
+
+🐛 **Self-Sabotage Bug behoben** - Phase 6 deaktiviert nicht mehr den eigenen "Copilot-Removal" Task
+🐛 **Task-Erstellung robuster** - Verwendet jetzt direkt schtasks.exe mit XML (statt PowerShell Register-ScheduledTask)
+🐛 **GPO-Deployment** - `-Unattended` Parameter in Deploy-CopilotRemoval.cmd hinzugefügt
+🐛 **Versions-Tracking** - Script überprüft Version vor erneuter Ausführung (verhindert 33x Ausführung bei GPO)
+🐛 **Backup/Log-Pfade vereinheitlicht** - Beide unter `C:\ProgramData\badata\CopilotRemoval\`
+
+## Neu in v2.2
+
+✅ **Self-Elevation (UAC)** - Automatischer Admin-Prompt für Non-Admin User
+✅ **Phase 0: Prozess-Beendigung** - Copilot-Prozesse werden vor Entfernung beendet
+✅ **Zentrale Log-Location** - `C:\ProgramData\badata\CopilotRemoval\Logs\` mit User-Kontext
+✅ **HKU-Iteration** - Registry-Änderungen für alle User-Profile (nicht nur HKCU)
+✅ **Scheduled Task Support** - Automatische Wartung mit `-CreateScheduledTask`
+✅ **WebExperience Pattern** - MicrosoftWindows.Client.WebExperience wird erkannt
+✅ **MicrosoftOfficeHub Pattern** - "Microsoft 365 Copilot" App wird entfernt
+✅ **AppLocker Enhanced** - 7 Deny Rules (vorher 5)
+✅ **Task-Persistenz** - schtasks.exe Fallback für zuverlässige Task-Erstellung
+✅ **CMD-Wrapper** - Deploy-CopilotRemoval.cmd für einfaches Deployment
+
+## Neu in v2.1.3
 
 ✅ **Provisioned Package Removal** - Verhindert automatische Installation für neue Windows-User
 ✅ **Deprovisioned Registry Keys** - Blockiert Neuinstallation durch Feature Updates
 ✅ **Protocol Handler Blockierung** - ms-copilot:// und ms-windows-ai-copilot:// deaktiviert
 ✅ **Store Auto-Update Blockierung** - Verhindert Microsoft Store Reinstallation (Store bleibt funktional)
-✅ **AppLocker Enhanced** - 5 Deny Rules (Publisher + Path Rules)
 
 ## Neu in v2.1.2
 
 ✅ **Microsoft 365 Copilot Blockierung** - Vollständige Deaktivierung in Word, Excel, PowerPoint, Outlook, OneNote
 ✅ **Per-Application Controls** - Granulare Kontrolle für jede Office-Anwendung
 ✅ **Enhanced Monitoring** - Test-Script prüft jetzt auch M365 Copilot-Einstellungen
-
-## Neu in v2.1.1
-
-✅ **Unattended-Modus** - Vollautomatisch für GPO/Intune/SCCM
-✅ **RDS/Terminal Server Support** - UseTemp-Parameter für Multi-User-Umgebungen
-✅ **Custom Backup-Verzeichnis** - BackupDir-Parameter für Netzwerk-Backups
-✅ **Domain-Sicherheit** - NoGPUpdate-Parameter verhindert GPO-Überschreibung
-✅ **Performance-Optimierung** - Registry-Operationen 75% schneller
-✅ **33 Registry-Einstellungen** - Erweiterte Copilot-Blockierung (inkl. M365 Copilot)
-✅ **6 DNS-Domains** - Gezielte Copilot-Domain-Blockierung
 
 ---
 
@@ -42,6 +52,7 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 | **Test-CopilotPresence.ps1** | Monitoring & Überprüfung | ✅ Produktiv |
 | **Detect-CopilotRemoval.ps1** | Detection für SCCM/Intune | ✅ Produktiv |
 | **Enable-WDACCopilotBlock.ps1** | WDAC Kernel-Blockierung (Optional) | ✅ Produktiv |
+| **Deploy-CopilotRemoval.cmd** | CMD-Wrapper für Deployment | ✅ NEU v2.2 |
 | **1-Run-CopilotRemoval-Test.cmd** | Starter-Script (Testmodus) | ✅ Produktiv |
 | **2-Run-CopilotRemoval-Production.cmd** | Starter-Script (Produktiv) | ✅ Produktiv |
 
@@ -64,7 +75,13 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 .\Remove-CopilotComplete.ps1
 ```
 
-### 3. Monitoring einrichten
+### 3. Mit Scheduled Task (empfohlen)
+
+```powershell
+.\Remove-CopilotComplete.ps1 -CreateScheduledTask -TaskSchedule Weekly
+```
+
+### 4. Monitoring einrichten
 
 ```powershell
 .\Test-CopilotPresence.ps1 -CreateScheduledTask
@@ -76,15 +93,16 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 
 **Hauptscript zur vollständigen Copilot-Entfernung**
 
-### 10-Phasen-Strategie
+### 11-Phasen-Strategie (v2.2)
 
+0. **Prozess-Beendigung** ✨ NEU - Copilot-Prozesse werden beendet
 1. **App-Paket Entfernung** - AppX-Pakete (installiert & provisioniert)
-2. **Deprovisioned Keys** - Feature Update Reinstallation Prevention ✨ NEU v2.1.3
+2. **Deprovisioned Keys** - Feature Update Reinstallation Prevention
 3. **Registry-Konfiguration** - 33 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features)
 4. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
-5. **AppLocker-Regeln** - 5 Deny Rules (Publisher + Path) ✨ NEU v2.1.3
-6. **Protocol Handler** - ms-copilot:// blockiert ✨ NEU v2.1.3
-7. **Store Auto-Update** - Copilot-Pakete blockiert ✨ NEU v2.1.3
+5. **AppLocker-Regeln** - 7 Deny Rules (Publisher + Path) ✨ ENHANCED v2.2
+6. **Protocol Handler** - ms-copilot:// blockiert
+7. **Store Auto-Update** - Copilot-Pakete blockiert
 8. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
 9. **Scheduled Tasks** - AI-Tasks deaktivieren
 10. **Firewall-Regeln** - Netzwerk-Blockierung
@@ -101,6 +119,9 @@ Remove-CopilotComplete.ps1
     [-UseTemp]
     [-BackupDir <path>]
     [-NoGPUpdate]
+    [-CreateScheduledTask]    # NEU v2.2
+    [-TaskSchedule <Daily|Weekly|Monthly>]  # NEU v2.2
+    [-WithReboot]             # NEU v2.2
 ```
 
 | Parameter | Beschreibung |
@@ -113,6 +134,9 @@ Remove-CopilotComplete.ps1
 | `-UseTemp` | Nutzt C:\Temp\CopilotRemoval\$env:USERNAME (RDS) |
 | `-BackupDir` | Custom Backup-Pfad (z.B. Netzlaufwerk) |
 | `-NoGPUpdate` | Überspringt gpupdate (verhindert Domain-GPO-Konflikte) |
+| `-CreateScheduledTask` | ✨ NEU: Erstellt Scheduled Task für automatische Wartung |
+| `-TaskSchedule` | ✨ NEU: Task-Intervall (Daily/Weekly/Monthly, Standard: Weekly) |
+| `-WithReboot` | ✨ NEU: Automatischer Reboot nach Ausführung |
 
 ### Verwendungsbeispiele
 
@@ -122,6 +146,9 @@ Remove-CopilotComplete.ps1
 
 # Produktiv mit Bestätigungsdialogen
 .\Remove-CopilotComplete.ps1
+
+# Mit wöchentlichem Scheduled Task (empfohlen)
+.\Remove-CopilotComplete.ps1 -CreateScheduledTask -TaskSchedule Weekly
 
 # Automatisiert (GPO/Intune/SCCM)
 .\Remove-CopilotComplete.ps1 -Unattended
@@ -135,8 +162,8 @@ Remove-CopilotComplete.ps1
 # Custom Backup-Pfad
 .\Remove-CopilotComplete.ps1 -BackupDir "\\server\backup\copilot"
 
-# Vollautomatisch für GPO
-.\Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
+# Vollautomatisch mit Task und Reboot
+.\Remove-CopilotComplete.ps1 -Unattended -CreateScheduledTask -WithReboot
 ```
 
 ### Backup & Rollback
@@ -150,25 +177,56 @@ $env:LOCALAPPDATA\CopilotRemoval\Backup_YYYYMMDD_HHMMSS\
 └── Log_YYYYMMDD_HHMMSS.txt     # Detailliertes Log
 ```
 
+**Zentrale Logs (v2.2):**
+```
+C:\ProgramData\badata\CopilotRemoval\Logs\
+├── Log_YYYYMMDD_HHMMSS_User-<Username>.txt    # User-Ausführung
+└── Log_YYYYMMDD_HHMMSS_SYSTEM-Task.txt        # Scheduled Task
+```
+
 **Rollback:** Doppelklick auf `.reg` Datei → Import bestätigen → Neustart
 
-### Reinstallation Prevention (v2.1.3)
+### Reinstallation Prevention (v2.2)
 
 ✅ **5 Schutz-Ebenen gegen Neuinstallation:**
 
 1. **Provisioned Package Removal** - Entfernt AppX Provisioned Packages
 2. **Deprovisioned Registry Keys** - Feature Update Reinstallation blockiert
-3. **AppLocker Rules** - Application-Level Enforcement (5 Rules)
+3. **AppLocker Rules** - Application-Level Enforcement (7 Rules)
 4. **Protocol Handler Blocking** - ms-copilot:// deaktiviert
 5. **Store Auto-Update Blocking** - Microsoft Store Reinstallation verhindert
 
+### Package Family Names v2.2 (6)
+
+```
+Microsoft.Copilot_8wekyb3d8bbwe
+Microsoft.Windows.Ai.Copilot.Provider_8wekyb3d8bbwe
+MicrosoftWindows.Client.WebExperience_cw5n1h2txyewy
+Microsoft.WindowsCopilot_8wekyb3d8bbwe
+Microsoft.Windows.Copilot_8wekyb3d8bbwe
+Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe  ← NEU v2.2
+```
+
+### Features v2.2
+
+✨ **Self-Elevation (UAC)** - Non-Admin User erhalten automatisch UAC-Prompt
+✨ **Phase 0: Prozess-Beendigung** - Stop-CopilotProcesses beendet laufende Copilot-Prozesse
+✨ **HKU-Iteration** - Set-RegistryForAllUsers schreibt in alle User-Profile
+✨ **Zentrale Logs** - C:\ProgramData\badata\CopilotRemoval\Logs\ mit Kontext
+✨ **Scheduled Task** - Automatische Wartung mit AtStartup + Weekly Trigger
+✨ **WebExperience** - MicrosoftWindows.Client.WebExperience wird erkannt
+✨ **MicrosoftOfficeHub** - "Microsoft 365 Copilot" App wird entfernt
+✨ **AppLocker Enhanced** - 7 Deny Rules (5x Publisher + 2x Path)
+✨ **Task-Persistenz** - schtasks.exe Fallback mit XML-Datei
+✨ **Sicherer Speicherort** - C:\Program Files\badata\CopilotRemoval\
+
 ### Features v2.1.3
 
-✨ **Provisioned Package Removal** - 5 Package Family Names deprovisioned
-✨ **Deprovisioned Registry Keys** - HKLM:\\...\\Appx\\AppxAllUserStore\\Deprovisioned
-✨ **Protocol Handler Blockierung** - 3 Handler (ms-copilot, microsoft-edge-holographic, ms-windows-ai-copilot)
-✨ **Store Auto-Update Blockierung** - BlockedPackages Registry (Store bleibt funktional!)
-✨ **AppLocker Enhanced** - 3x FilePublisher + 2x FilePath Rules
+✅ **Provisioned Package Removal** - 5 Package Family Names deprovisioned
+✅ **Deprovisioned Registry Keys** - HKLM:\...\Appx\AppxAllUserStore\Deprovisioned
+✅ **Protocol Handler Blockierung** - 3 Handler (ms-copilot, microsoft-edge-holographic, ms-windows-ai-copilot)
+✅ **Store Auto-Update Blockierung** - BlockedPackages Registry (Store bleibt funktional!)
+✅ **AppLocker Enhanced** - 3x FilePublisher + 2x FilePath Rules (jetzt 7 in v2.2)
 
 ### Features v2.1.2
 
@@ -190,15 +248,15 @@ $env:LOCALAPPDATA\CopilotRemoval\Backup_YYYYMMDD_HHMMSS\
 ### Überprüfungen
 
 ✅ App-Pakete (installiert & provisioniert)
-✅ Registry-Einstellungen (HKLM & HKCU, inkl. v2.1.2/2.1.3 Features)
+✅ Registry-Einstellungen (HKLM & HKCU, inkl. v2.2 Features)
 ✅ Kontextmenü-Blockierung
 ✅ Hosts-Datei Einträge
 ✅ Firewall-Regeln
 ✅ Scheduled Tasks
 ✅ Office Connected Experiences
 ✅ **Microsoft 365 Copilot** (Word, Excel, PowerPoint, Outlook, OneNote)
-✅ **Deprovisioned Keys** ✨ NEU v2.1.3
-✅ **Protocol Handler** ✨ NEU v2.1.3
+✅ **Deprovisioned Keys**
+✅ **Protocol Handler**
 
 ### Parameter
 
@@ -209,6 +267,7 @@ Test-CopilotPresence.ps1
     [-CreateScheduledTask]
     [-LogPath <path>]
     [-UseTemp]
+    [-Force]      # NEU: Überspringt Bestätigung
 ```
 
 ### Beispiele
@@ -291,14 +350,14 @@ Enable-WDACCopilotBlock.ps1
 
 ```
 Computer Configuration → Policies → Windows Settings → Scripts → Startup
-Script: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
+Script: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate -CreateScheduledTask
 ```
 
 ### Option 2: Microsoft Intune
 
 ```
 App Type: Windows app (Win32)
-Install: powershell.exe -ExecutionPolicy Bypass -File "Remove-CopilotComplete.ps1" -Unattended
+Install: powershell.exe -ExecutionPolicy Bypass -File "Remove-CopilotComplete.ps1" -Unattended -CreateScheduledTask
 Detect:  Detect-CopilotRemoval.ps1
 ```
 
@@ -306,11 +365,17 @@ Detect:  Detect-CopilotRemoval.ps1
 
 ```
 Application → Script Installer
-Install: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate
+Install: Remove-CopilotComplete.ps1 -Unattended -NoGPUpdate -CreateScheduledTask
 Detection: Detect-CopilotRemoval.ps1
 ```
 
-### Option 4: Manuell
+### Option 4: CMD-Wrapper (NEU v2.2)
+
+```cmd
+Deploy-CopilotRemoval.cmd
+```
+
+### Option 5: Manuell
 
 ```powershell
 # CMD-Starter (Admin-Rechte + Testmodus)
@@ -329,10 +394,11 @@ Detection: Detect-CopilotRemoval.ps1
 
 ```
 copilot-removal-toolkit/
-├── Remove-CopilotComplete.ps1          # Main script v2.1.3
+├── Remove-CopilotComplete.ps1          # Main script v2.2
 ├── Test-CopilotPresence.ps1            # Monitoring script v1.1
 ├── Detect-CopilotRemoval.ps1           # SCCM/Intune detection v1.1
 ├── Enable-WDACCopilotBlock.ps1         # WDAC blocking v1.0
+├── Deploy-CopilotRemoval.cmd           # CMD-Wrapper v2.2 (NEU)
 ├── 1-Run-CopilotRemoval-Test.cmd       # Starter (test mode)
 ├── 2-Run-CopilotRemoval-Production.cmd # Starter (production)
 ├── README.md                           # This file
@@ -348,7 +414,7 @@ copilot-removal-toolkit/
 
 - **Betriebssystem:** Windows 10 (Build 17763+) oder Windows 11
 - **PowerShell:** Version 5.1 oder höher
-- **Rechte:** Administratorrechte erforderlich
+- **Rechte:** Administratorrechte erforderlich (Self-Elevation in v2.2)
 - **AppLocker:** Nur bei Windows Pro/Enterprise/Education
 - **WDAC:** Nur bei Windows Enterprise/Education/Server
 
@@ -382,7 +448,47 @@ copilot-removal-toolkit/
 
 ## 📝 Changelog
 
-### v2.1.3 (November 2025) - Current
+### v2.2.1 (Dezember 2025) - Current (Hotfix)
+
+**Bugfixes:**
+- 🐛 **Self-Sabotage Bug** - Phase 6 deaktiviert nicht mehr den eigenen "Copilot-Removal" Task
+- 🐛 **Task-Erstellung** - Verwendet jetzt direkt schtasks.exe mit XML (PowerShell Register-ScheduledTask erstellt Tasks als disabled)
+- 🐛 **GPO-Deployment** - `-Unattended` Parameter in Deploy-CopilotRemoval.cmd hinzugefügt
+- 🐛 **Versions-Tracking** - Script prüft Version vor erneuter Ausführung (verhindert 33x Ausführung bei GPO)
+- 🐛 **Backup/Log-Pfade** - Vereinheitlicht unter `C:\ProgramData\badata\CopilotRemoval\`
+- 🐛 **$ExecutionContext** - Umbenannt zu $RunContext (reservierte PowerShell-Variable)
+- 🐛 **WebViewHost** - Microsoft 365 Copilot App Prozess wird jetzt erkannt und beendet
+
+### v2.2 (Dezember 2025)
+
+**Neue Features:**
+- ✨ **Self-Elevation (UAC)** - Automatischer Admin-Prompt für Non-Admin User
+- ✨ **Phase 0: Prozess-Beendigung** - Stop-CopilotProcesses beendet Copilot-Prozesse vor Entfernung
+- ✨ **Zentrale Log-Location** - C:\ProgramData\badata\CopilotRemoval\Logs\ mit User-Kontext
+- ✨ **HKU-Iteration** - Registry-Änderungen für alle User-Profile (Set-RegistryForAllUsers)
+- ✨ **Scheduled Task Support** - Neue Parameter -CreateScheduledTask, -TaskSchedule, -WithReboot
+- ✨ **WebExperience Pattern** - MicrosoftWindows.Client.WebExperience wird erkannt und entfernt
+- ✨ **MicrosoftOfficeHub Pattern** - "Microsoft 365 Copilot" App wird entfernt
+- ✨ **AppLocker Enhanced** - 7 Deny Rules (vorher 5: +WebExperience Publisher & Path)
+- ✨ **Task-Persistenz** - schtasks.exe Fallback mit XML-Datei für zuverlässige Task-Erstellung
+- ✨ **CMD-Wrapper** - Deploy-CopilotRemoval.cmd für einfaches Deployment
+- ✨ **Sicherer Speicherort** - C:\Program Files\badata\CopilotRemoval\ für Script-Kopie
+
+**Technische Details:**
+- 📊 Phase 0: Stop-CopilotProcesses() - Beendet laufende Copilot-Prozesse
+- 📊 HKU-Iteration: Set-RegistryForAllUsers() - Schreibt in alle User-Profile
+- 📊 Zentrale Logs: Log_YYYYMMDD_HHMMSS_<Context>.txt (User-xxx / SYSTEM-Task)
+- 📊 Scheduled Task: AtStartup + Weekly Trigger, SYSTEM-Kontext
+- 📊 AppLocker: 7 Deny Rules (5x FilePublisher + 2x FilePath)
+- 📊 Package Patterns: *Copilot*, *WindowsAI*, *WebExperience*, *MicrosoftOfficeHub*
+- 📊 6 Package Family Names (vorher 5)
+
+**Bugfixes:**
+- 🐛 Task-Aktivierung: Explizite Aktivierung mit Enable-ScheduledTask
+- 🐛 Task-Persistenz: schtasks.exe Fallback verhindert Task-Verschwinden nach Reboot
+- 🐛 Test-CopilotPresence.ps1: -Force Parameter für nicht-interaktive Ausführung
+
+### v2.1.3 (November 2025)
 
 **Reinstallation Prevention:**
 - ✨ **Provisioned Package Removal** - Verhindert Installation für neue Windows-User
@@ -398,12 +504,6 @@ copilot-removal-toolkit/
 - 📊 Phase 4c: Block-CopilotStoreAutoUpdate() - BlockedPackages Registry
 - 🐛 Hotfix 1: HKCR PSDrive creation (verhindert "Laufwerk nicht gefunden" Fehler)
 
-**Statistik:**
-- +250 Zeilen Code
-- 3 neue Funktionen
-- 3 neue Phasen (1b, 4b, 4c)
-- 5 Reinstallations-Vektoren blockiert
-
 ### v2.1.2 (November 2025)
 
 **Neue Features:**
@@ -411,11 +511,6 @@ copilot-removal-toolkit/
 - ✨ **13 neue Registry-Einstellungen** - M365 Copilot für Word, Excel, PowerPoint, Outlook, OneNote
 - ✨ **Enhanced Monitoring** - Test-CopilotPresence.ps1 prüft M365 Copilot-Status
 - ✨ **Per-Application Controls** - Granulare Kontrolle pro Office-App
-
-**Technische Details:**
-- 📊 Gesamt: 33 Registry-Einstellungen (vorher 20)
-- 🔒 M365 Copilot: Main Toggle (HKCU/HKLM) + Per-App Settings
-- ✅ Test-Script: Neue Funktion Test-Microsoft365Copilot()
 
 ### v2.1.1 (November 2025)
 
@@ -425,35 +520,17 @@ copilot-removal-toolkit/
 - ✨ **Domain-Sicherheit** - NoGPUpdate-Parameter verhindert GPO-Konflikte
 - ✨ **Custom Backup Directory** - BackupDir-Parameter für Netzwerk-Backups
 - ✨ **Performance-Optimierung** - Registry-Backup 75% schneller
-- ✨ **Progress Bar Fix** - Kein Flackern mehr (Update alle 5 Keys)
-
-**Bugfixes:**
-- 🐛 **Encoding-Fix** - PowerShell UTF-8 Parsing-Probleme behoben
-- 🐛 **Test-CopilotPresence.ps1** - Unicode-Zeichen durch ASCII ersetzt
-- 🐛 **Enable-WDACCopilotBlock.ps1** - Deny-Regeln werden jetzt korrekt eingefügt
-- 🐛 **JSON-Serialization** - Vereinfachtes Report-Objekt verhindert Hanging
-
-**Code-Qualität:**
-- ✅ Alle Scripts Syntax-validiert (0 Fehler)
-- ✅ Logik-Fehler behoben
-- ✅ Production-Ready
 
 ### v2.1 (November 2025)
 
 - ✨ Copilot-Hardwaretaste blockieren/umleiten
 - ✨ Windows Recall deaktivieren (Copilot+ PCs)
-- ✨ Click-To-Do KI-Aktionen deaktivieren
-- ✨ Office Connected Experiences komplett deaktivieren
-- ✨ Game Bar Copilot entfernen
-- ✨ Edge/Notepad/Paint Copilot blockieren
-- ✨ 20 Registry-Einstellungen (erweitert von 6)
+- ✨ 20 Registry-Einstellungen
 - ✨ 6 DNS-Domains gezielt blockiert
 
 ### v2.0 (November 2025)
 
 - ✨ Rollback-Funktionalität
-- ✨ Windows-Version-Erkennung
-- ✨ Dynamische Pfaderkennung
 - ✨ JSON-Report
 - ✨ Progress-Anzeige
 
@@ -474,7 +551,7 @@ copilot-removal-toolkit/
 
 ---
 
-**Letztes Update:** November 2025 (v2.1.3)
+**Letztes Update:** Dezember 2025 (v2.2.1)
 **Status:** ✅ Production Ready
-**Getestet auf:** Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26200
-**Neu:** Reinstallation Prevention (5 Schutz-Ebenen)
+**Getestet auf:** Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26100
+**Neu:** Self-Sabotage Bug behoben, Task-Erstellung via schtasks.exe, Versions-Tracking

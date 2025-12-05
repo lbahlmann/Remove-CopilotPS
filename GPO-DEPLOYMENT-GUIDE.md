@@ -1,9 +1,17 @@
 ##### Group Policy Deployment Guide - Microsoft Copilot Blockierung
 
-**Version:** 1.0
-**Datum:** 19. November 2025
+**Version:** 2.2.1
+**Datum:** 05. Dezember 2025
 **Zielgruppe:** IT-Administratoren, System Engineers
 **Gültigkeit:** Windows 10/11, Microsoft 365 Apps
+
+---
+
+##### 🆕 v2.2.1 Hotfix
+
+🐛 **Self-Sabotage Bug behoben** - Phase 6 deaktiviert nicht mehr den eigenen "Copilot-Removal" Task
+🐛 **GPO-Deployment** - `-Unattended` Parameter in Deploy-CopilotRemoval.cmd hinzugefügt
+🐛 **Versions-Tracking** - Verhindert 33x Ausführung bei wiederholten GPO-Anmeldungen
 
 ---
 
@@ -41,13 +49,14 @@ Das PowerShell-Script **Remove-CopilotComplete.ps1** implementiert folgende Maß
 
 | Feature | Methode | Script-Phase | Status |
 |---------|---------|--------------|--------|
+| **Prozesse beenden** | `Stop-Process` | Phase 0 | ✅ NEU v2.2 |
 | **Copilot-Paket entfernen** | `Remove-AppxPackage -AllUsers` | Phase 1 | ✅ Automatisch |
 | **Provisioned Packages entfernen** | `Remove-AppxProvisionedPackage` | Phase 1 | ✅ Automatisch |
 | **Deprovisioned Registry Keys** | Registry (HKLM) | Phase 1b | ✅ Automatisch |
 | **Windows Copilot Registry** | `TurnOffWindowsCopilot` | Phase 2 | ✅ Automatisch |
-| **M365 Copilot Registry** | 13 Settings (Word, Excel, etc.) | Phase 2 | ✅ Automatisch |
+| **M365 Copilot Registry** | 13 Settings (Word, Excel, etc.) + HKU-Iteration | Phase 2 | ✅ ENHANCED v2.2 |
 | **Kontextmenü entfernen** | Shell Extension GUID | Phase 3 | ✅ Automatisch |
-| **AppLocker Rules** | 5 Deny Rules (XML-Policy) | Phase 4 | ✅ Automatisch |
+| **AppLocker Rules** | 7 Deny Rules (XML-Policy) | Phase 4 | ✅ ENHANCED v2.2 |
 | **Protocol Handler blockieren** | HKCR Registry Keys | Phase 4b | ✅ Automatisch |
 | **Store Auto-Update blockieren** | BlockedPackages Registry | Phase 4c | ✅ Automatisch |
 | **DNS-Blockierung** | hosts-Datei (6 Domains) | Phase 5 | ✅ Automatisch |
@@ -97,7 +106,7 @@ Die folgenden Maßnahmen sind **optional** und können über **Group Policy** ze
 **1. GPO Startup Script:**
 ```
 Computer Configuration → Policies → Windows Settings → Scripts → Startup
-→ Add: \\domain\netlogon\Remove-CopilotComplete.ps1 -Unattended
+→ Add: \\domain\netlogon\Remove-CopilotComplete.ps1 -Unattended -CreateScheduledTask
 ```
 
 **2. GPO AppLocker Policy:**
@@ -136,7 +145,7 @@ User Configuration → Administrative Templates → Microsoft Office 2016
 **1. Intune Remediation Script:**
 ```
 Endpoint Manager → Devices → Scripts and remediations
-→ Add: Remove-CopilotComplete.ps1 -Unattended
+→ Add: Remove-CopilotComplete.ps1 -Unattended -CreateScheduledTask
 → Assign to: All Devices
 → Schedule: Once
 ```
@@ -210,11 +219,12 @@ M365 Admin Center → Cloud Policy → Disable Copilot: Enabled
 ##### 📝 Zusammenfassung
 
 ##### Das Script macht:
-- ✅ **Phase 1-6:** Vollständige lokale Blockierung
-- ✅ **Registry:** Alle Windows + M365 Copilot Settings
-- ✅ **AppLocker:** 5 Deny Rules (lokal)
+- ✅ **Phase 0-6:** Vollständige lokale Blockierung (inkl. Prozess-Beendigung)
+- ✅ **Registry:** Alle Windows + M365 Copilot Settings + HKU-Iteration
+- ✅ **AppLocker:** 7 Deny Rules (lokal) ✨ ENHANCED v2.2
 - ✅ **DNS:** hosts-Datei Blockierung
-- ✅ **Pakete:** Entfernung + Deprovisioning
+- ✅ **Pakete:** Entfernung + Deprovisioning (6 Package Family Names)
+- ✅ **Scheduled Task:** Automatische Wartung (Weekly + AtStartup) ✨ NEU v2.2
 
 ##### GPO/Intune ergänzt:
 - 🔄 **Zentrale Verwaltung:** Policies Domain-weit
@@ -692,7 +702,8 @@ Get-GPResultantSetOfPolicy -ReportType Html -Path C:\GPReport.html
 
 ---
 
-**Dokument-Version:** 1.0
-**Letztes Update:** 19. November 2025
-**Autor:** IT-Administration
+**Dokument-Version:** 2.2
+**Letztes Update:** 05. Dezember 2025
+**Autor:** IT-Administration / badata GmbH
 **Status:** ✅ Freigegeben für Deployment
+**Neu:** Self-Elevation, Scheduled Tasks, Zentrale Logs, 7 AppLocker Rules, HKU-Iteration
