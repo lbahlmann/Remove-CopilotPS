@@ -1,7 +1,7 @@
 @echo off
 REM ============================================
 REM Microsoft Copilot Removal - Full Unattended
-REM Version: 2.2.1
+REM Version: 2.3.1
 REM Fuer GPO/Intune/SCCM Deployment
 REM ============================================
 REM
@@ -15,7 +15,7 @@ REM ============================================
 
 echo.
 echo ================================================
-echo Microsoft Copilot Removal Toolkit v2.2.1
+echo Microsoft Copilot Removal Toolkit v2.3.1
 echo FULL UNATTENDED DEPLOYMENT
 echo ================================================
 echo.

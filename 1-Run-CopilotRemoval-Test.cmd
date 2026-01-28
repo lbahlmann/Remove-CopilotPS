@@ -1,10 +1,14 @@
 @echo off
-REM Microsoft Copilot Removal - Starter Script
+REM ============================================
+REM Microsoft Copilot Removal - Test Starter
+REM Version: 2.3.1
 REM Umgeht Execution Policy und startet mit Admin-Rechten
+REM ============================================
 
 echo.
 echo ================================================
-echo Microsoft Copilot Removal Toolkit v2.1
+echo Microsoft Copilot Removal Toolkit v2.3.1
+echo TESTMODUS (LogOnly)
 echo ================================================
 echo.
 echo Starte Script mit Administrator-Rechten...

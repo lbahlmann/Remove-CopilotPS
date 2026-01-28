@@ -28,7 +28,7 @@
 .AUTHOR
     Lars Bahlmann / badata GmbH - IT Systemhaus in Bremen / www.badata.de
 .VERSION
-    1.1 - November 2025 (Microsoft 365 Copilot Checks)
+    2.3.1 - Januar 2026 (Unified Toolkit Version)
 #>
 
 param(
@@ -39,6 +39,8 @@ param(
     [switch]$UseTemp,
     [switch]$Force
 )
+
+$Script:Version = "2.3.1"
 
 # Automatische Pfad-Ermittlung (RDS-sicher, ohne Systemordner-Aenderungen)
 if (-not $LogPath) {

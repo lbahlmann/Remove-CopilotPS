@@ -34,7 +34,7 @@
 .AUTHOR
     Lars Bahlmann / badata GmbH - IT Systemhaus in Bremen / www.badata.de
 .VERSION
-    1.0 - November 2025
+    2.3.1 - Januar 2026 (Unified Toolkit Version)
 .NOTES
     - Erfordert Windows 10/11 Enterprise oder Windows Server
     - Erfordert Administratorrechte
@@ -48,6 +48,8 @@ param(
     [switch]$Deploy,
     [switch]$AuditOnly
 )
+
+$Script:Version = "2.3.1"
 
 # ========================================
 # FUNKTIONEN

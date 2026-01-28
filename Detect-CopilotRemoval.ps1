@@ -31,12 +31,14 @@
 .AUTHOR
     Lars Bahlmann / badata GmbH - IT Systemhaus in Bremen / www.badata.de
 .VERSION
-    1.1 - November 2025 (Added Hosts File Check)
+    2.3.1 - Januar 2026 (Unified Toolkit Version)
 #>
 
 param(
     [switch]$Verbose
 )
+
+$Script:Version = "2.3.1"
 
 # ========================================
 # DETECTION-LOGIK
