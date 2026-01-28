@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Microsoft Copilot Removal Toolkit v2.3
+    Microsoft Copilot Removal Toolkit v2.3.1
 .DESCRIPTION
     Comprehensive script for removing Microsoft Copilot and blocking reinstallation
     All v2.1 features: Edge, Office, Notepad, Paint, Recall, Hardware Button, Game Bar
@@ -9,6 +9,7 @@
     v2.1.3: Reinstallation prevention (Provisioned Packages, Deprovisioned Keys, AppLocker, Protocol Handlers, Store Auto-Update)
     v2.2: Full Unattended mode with Scheduled Task support, HKU iteration for all users
     v2.3: Edge Copilot Extensions blocking, Outlook COM Add-In deactivation
+    v2.3.1: EnableAppsInOutlook, EdgeSidebarAppUrlHostBlockList, EdgeEntraCopilotPageContext
 .PARAMETER LogOnly
     Test run without actual changes
 .PARAMETER NoRestart
@@ -32,7 +33,7 @@
 .PARAMETER WithReboot
     Automatic reboot after execution (only for initial installation)
 .NOTES
-    Version: 2.3
+    Version: 2.3.1
 #>
 
 param(
@@ -96,7 +97,7 @@ if ($CreateScheduledTask) {
 }
 
 $ErrorActionPreference = "Continue"
-$Script:Version = "2.3.0"
+$Script:Version = "2.3.1"
 $Script:SecureInstallPath = "$env:ProgramFiles\badata\CopilotRemoval"
 $Script:StartTime = Get-Date
 
@@ -770,12 +771,14 @@ function Configure-RegistrySettings {
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='CopilotPageEnabled'; Value=0},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='Microsoft365CopilotChatIconEnabled'; Value=0},
 
-        # Edge Copilot - Erweiterte Blockierung (v2.3)
+        # Edge Copilot - Erweiterte Blockierung (v2.3.1)
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='DiscoverPageContextEnabled'; Value=0},
-        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='CopilotCDPPageContext'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='EdgeEntraCopilotPageContext'; Value=0},  # Ersetzt veraltetes CopilotCDPPageContext
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='ShowRecommendationsEnabled'; Value=0},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SpotlightExperiencesAndRecommendationsEnabled'; Value=0},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='EdgeAssetDeliveryServiceEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='EdgeSidebarCustomizeEnabled'; Value=0},  # Verhindert Sidebar-Anpassung
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='EdgeOpenInSidebarEnabled'; Value=0},     # Deaktiviert "In Sidebar oeffnen"
         @{Path='HKCU:\Software\Policies\Microsoft\Edge'; Name='HubsSidebarEnabled'; Value=0},
         @{Path='HKCU:\Software\Policies\Microsoft\Edge'; Name='CopilotPageEnabled'; Value=0},
 
@@ -805,6 +808,9 @@ function Configure-RegistrySettings {
         @{Path='HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilot'; Value=1},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilotInOutlook'; Value=1},
         @{Path='HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilotInOutlook'; Value=1},
+
+        # Outlook "Show Apps" - Entfernt Copilot-Button komplett aus Classic Outlook (v2.3.1 - KRITISCH)
+        @{Path='HKCU:\Software\Microsoft\Office\16.0\Outlook\Preferences'; Name='EnableAppsInOutlook'; Value=0},
 
         # Notepad AI (v2.1)
         @{Path='HKLM:\SOFTWARE\Policies\WindowsNotepad'; Name='DisableAIFeatures'; Value=1},
@@ -1340,7 +1346,8 @@ function Block-EdgeCopilotExtensions {
     $EdgeSettingsPaths = @(
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarShowOnStartupEnabled'; Value=0},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarEnabled'; Value=0},
-        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarSearchEnabled'; Value=0}
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarSearchEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='StandaloneHubsSidebarEnabled'; Value=0}
     )
 
     foreach ($Setting in $EdgeSettingsPaths) {
@@ -1356,7 +1363,53 @@ function Block-EdgeCopilotExtensions {
         }
     }
 
-    Write-Log "Edge Copilot Extensions - $BlockedCount blockiert, Sidebar deaktiviert" "SUCCESS"
+    # EdgeSidebarAppUrlHostBlockList - Granulare Blockierung von Copilot (v2.3.1)
+    # Blockiert spezifisch edge://discover-chat ohne andere Sidebar-Apps zu beeinflussen
+    Write-Log "Konfiguriere EdgeSidebarAppUrlHostBlockList (granulare Copilot-Blockierung)..." "INFO"
+    $SidebarBlockListPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\EdgeSidebarAppUrlHostBlockList'
+    if (-not (Test-Path $SidebarBlockListPath)) {
+        New-Item -Path $SidebarBlockListPath -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    # Copilot-spezifische URLs blockieren
+    $CopilotSidebarUrls = @(
+        'edge://discover-chat',           # Copilot Chat in Sidebar
+        'edge://discover',                # Discover/Copilot Einstieg
+        'https://copilot.microsoft.com',  # Copilot Web
+        'https://www.bing.com/chat'       # Bing Chat (Copilot)
+    )
+
+    $SidebarIndex = 1
+    $ExistingSidebarEntries = Get-ItemProperty -Path $SidebarBlockListPath -ErrorAction SilentlyContinue
+    if ($ExistingSidebarEntries) {
+        $ExistingSidebarValues = $ExistingSidebarEntries.PSObject.Properties | Where-Object { $_.Name -match '^\d+$' }
+        if ($ExistingSidebarValues) {
+            $SidebarIndex = ([int[]]($ExistingSidebarValues.Name) | Measure-Object -Maximum).Maximum + 1
+        }
+    }
+
+    foreach ($Url in $CopilotSidebarUrls) {
+        $AlreadyBlocked = $false
+        if ($ExistingSidebarEntries) {
+            $AlreadyBlocked = $ExistingSidebarEntries.PSObject.Properties.Value -contains $Url
+        }
+
+        if (-not $AlreadyBlocked) {
+            try {
+                Set-ItemProperty -Path $SidebarBlockListPath -Name $SidebarIndex -Value $Url -Type String -ErrorAction Stop
+                Write-Log "Sidebar URL blockiert: $Url (Index: $SidebarIndex)" "SUCCESS"
+                $SidebarIndex++
+            }
+            catch {
+                Write-Log "Sidebar URL Blockierung fehlgeschlagen: $Url - $($_.Exception.Message)" "WARNING"
+            }
+        }
+        else {
+            Write-Log "Sidebar URL bereits blockiert: $Url" "INFO"
+        }
+    }
+
+    Write-Log "Edge Copilot Extensions - $BlockedCount blockiert, Sidebar deaktiviert, URL-Blocklist konfiguriert" "SUCCESS"
 }
 
 function Create-FirewallRules {

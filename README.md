@@ -1,14 +1,24 @@
-# Microsoft Copilot Removal Toolkit v2.3.0
+# Microsoft Copilot Removal Toolkit v2.3.1
 
 Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11 Systemen.
 
 **Status:** ✅ Production Ready
-**Version:** 2.3.0 (Januar 2026)
+**Version:** 2.3.1 (Januar 2026)
 **License:** MIT
 
 ---
 
-## 🆕 Neu in v2.3.0
+## 🆕 Neu in v2.3.1 (basierend auf Online-Recherche)
+
+✅ **EnableAppsInOutlook=0** - **KRITISCH**: Entfernt Copilot-Button komplett aus Classic Outlook
+✅ **EdgeEntraCopilotPageContext** - Ersetzt veraltetes CopilotCDPPageContext (deprecated ab Edge 133)
+✅ **EdgeSidebarAppUrlHostBlockList** - Granulare URL-Blockierung für edge://discover-chat
+✅ **EdgeSidebarCustomizeEnabled=0** - Verhindert Benutzeranpassung der Sidebar
+✅ **EdgeOpenInSidebarEnabled=0** - Deaktiviert "In Sidebar öffnen" Option
+✅ **StandaloneHubsSidebarEnabled=0** - Zusätzliche Sidebar-Blockierung
+✅ **4 Copilot-URLs blockiert** - edge://discover-chat, edge://discover, copilot.microsoft.com, bing.com/chat
+
+## Neu in v2.3.0
 
 ✅ **Outlook COM Add-In Deaktivierung** - Blockiert Copilot-Button in Classic Outlook (Phase 4d)
 ✅ **Edge Copilot Extension Blockierung** - Blockiert Copilot-Extensions und Sidebar-Icon (Phase 4e)
@@ -217,15 +227,23 @@ Microsoft.Windows.Copilot_8wekyb3d8bbwe
 Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe  ← NEU v2.2
 ```
 
+### Features v2.3.1
+
+✨ **EnableAppsInOutlook=0** - KRITISCH: Entfernt Copilot-Button komplett aus Classic Outlook
+✨ **EdgeEntraCopilotPageContext** - Moderne Policy (ersetzt veraltetes CopilotCDPPageContext)
+✨ **EdgeSidebarAppUrlHostBlockList** - Granulare Blockierung von Copilot-URLs in Sidebar
+✨ **EdgeSidebarCustomizeEnabled=0** - Verhindert Sidebar-Anpassung durch Benutzer
+✨ **EdgeOpenInSidebarEnabled=0** - Deaktiviert "In Sidebar öffnen" Kontextmenü
+✨ **48 Registry-Einstellungen** - (vorher 44, +4 für Edge/Outlook)
+
 ### Features v2.3
 
 ✨ **Outlook COM Add-In Deaktivierung** - Disable-OutlookCopilotAddIn() deaktiviert Copilot in Classic Outlook
 ✨ **Edge Extension Blockierung** - Block-EdgeCopilotExtensions() blockiert Copilot-Extensions
-✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, CopilotCDPPageContext, Sidebar-Settings
+✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, Sidebar-Settings
 ✨ **4 neue Outlook Policy-Settings** - DisableCopilot, DisableCopilotInOutlook für HKLM/HKCU
 ✨ **Policy-basierte Add-In-Blockierung** - DoNotLoadAddinList für Enterprise-Kontrolle
 ✨ **HKU-Iteration für Outlook** - Add-Ins werden für alle User-Profile deaktiviert
-✨ **44 Registry-Einstellungen** - (vorher 33)
 
 ### Features v2.2
 
@@ -468,12 +486,32 @@ copilot-removal-toolkit/
 
 ## 📝 Changelog
 
-### v2.3.0 (Januar 2026) - Current
+### v2.3.1 (Januar 2026) - Current
+
+**Basierend auf Online-Recherche (Microsoft Learn, Community-Feedback):**
+- ✨ **EnableAppsInOutlook=0** - KRITISCH: Entfernt Copilot-Button komplett aus Classic Outlook
+- ✨ **EdgeEntraCopilotPageContext** - Ersetzt veraltetes CopilotCDPPageContext (deprecated ab Edge 133)
+- ✨ **EdgeSidebarAppUrlHostBlockList** - Granulare URL-Blockierung (edge://discover-chat, edge://discover, etc.)
+- ✨ **EdgeSidebarCustomizeEnabled=0** - Verhindert Benutzeranpassung der Sidebar
+- ✨ **EdgeOpenInSidebarEnabled=0** - Deaktiviert "In Sidebar öffnen" Option
+- ✨ **StandaloneHubsSidebarEnabled=0** - Zusätzliche Sidebar-Blockierung
+
+**Technische Details:**
+- 📊 48 Registry-Einstellungen (vorher 44)
+- 📊 4 Copilot-URLs in EdgeSidebarAppUrlHostBlockList blockiert
+- 📊 Veraltete Policy CopilotCDPPageContext durch EdgeEntraCopilotPageContext ersetzt
+
+**Quellen:**
+- [Microsoft Learn - EdgeSidebarAppUrlHostBlockList](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/edgesidebarappurlhostblocklist)
+- [Microsoft Learn - EdgeEntraCopilotPageContext](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/edgeentracopilotpagecontext)
+- [Microsoft Q&A - Show Apps in Outlook](https://learn.microsoft.com/en-us/answers/questions/1347973/how-to-turn-off-show-apps-in-outlook-via-gpo)
+
+### v2.3.0 (Januar 2026)
 
 **Neue Features:**
 - ✨ **Outlook COM Add-In Deaktivierung** (Phase 4d) - Blockiert Copilot-Button in Classic Outlook
 - ✨ **Edge Copilot Extension Blockierung** (Phase 4e) - Blockiert Copilot-Extensions und Sidebar-Icon
-- ✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, CopilotCDPPageContext, ShowRecommendationsEnabled, SpotlightExperiencesAndRecommendationsEnabled, EdgeAssetDeliveryServiceEnabled, HKCU Edge-Policies
+- ✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, ShowRecommendationsEnabled, etc.
 - ✨ **4 neue Outlook Policy-Settings** - DisableCopilot und DisableCopilotInOutlook für HKLM und HKCU
 - ✨ **Policy-basierte Add-In-Blockierung** - DoNotLoadAddinList mit AddinListEnabled für Enterprise-Kontrolle
 - ✨ **HKU-Iteration für Outlook Add-Ins** - Deaktiviert Add-Ins für alle User-Profile
@@ -592,7 +630,7 @@ copilot-removal-toolkit/
 
 ---
 
-**Letztes Update:** Januar 2026 (v2.3.0)
+**Letztes Update:** Januar 2026 (v2.3.1)
 **Status:** ✅ Production Ready
 **Getestet auf:** Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26100
-**Neu:** Outlook COM Add-In Deaktivierung, Edge Copilot Extension Blockierung
+**Neu:** EnableAppsInOutlook, EdgeSidebarAppUrlHostBlockList, EdgeEntraCopilotPageContext
