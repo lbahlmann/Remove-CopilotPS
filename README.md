@@ -1,14 +1,22 @@
-# Microsoft Copilot Removal Toolkit v2.2.1
+# Microsoft Copilot Removal Toolkit v2.3.0
 
 Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11 Systemen.
 
 **Status:** ✅ Production Ready
-**Version:** 2.2.1 (Dezember 2025)
+**Version:** 2.3.0 (Januar 2026)
 **License:** MIT
 
 ---
 
-## 🆕 Neu in v2.2.1 (Hotfix)
+## 🆕 Neu in v2.3.0
+
+✅ **Outlook COM Add-In Deaktivierung** - Blockiert Copilot-Button in Classic Outlook (Phase 4d)
+✅ **Edge Copilot Extension Blockierung** - Blockiert Copilot-Extensions und Sidebar-Icon (Phase 4e)
+✅ **Erweiterte Edge Registry-Settings** - 7 zusätzliche Edge-Policies für vollständige Blockierung
+✅ **Policy-basierte Outlook-Blockierung** - DoNotLoadAddinList für zuverlässige Add-In-Deaktivierung
+✅ **HKU-Iteration für Add-Ins** - Deaktiviert Outlook Add-Ins für alle User-Profile
+
+## Neu in v2.2.1 (Hotfix)
 
 🐛 **Self-Sabotage Bug behoben** - Phase 6 deaktiviert nicht mehr den eigenen "Copilot-Removal" Task
 🐛 **Task-Erstellung robuster** - Verwendet jetzt direkt schtasks.exe mit XML (statt PowerShell Register-ScheduledTask)
@@ -93,19 +101,21 @@ Vollständige Entfernung und Blockierung von Microsoft Copilot auf Windows 10/11
 
 **Hauptscript zur vollständigen Copilot-Entfernung**
 
-### 11-Phasen-Strategie (v2.2)
+### 13-Phasen-Strategie (v2.3)
 
-0. **Prozess-Beendigung** ✨ NEU - Copilot-Prozesse werden beendet
+0. **Prozess-Beendigung** - Copilot-Prozesse werden beendet
 1. **App-Paket Entfernung** - AppX-Pakete (installiert & provisioniert)
-2. **Deprovisioned Keys** - Feature Update Reinstallation Prevention
-3. **Registry-Konfiguration** - 33 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features)
-4. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
-5. **AppLocker-Regeln** - 7 Deny Rules (Publisher + Path) ✨ ENHANCED v2.2
-6. **Protocol Handler** - ms-copilot:// blockiert
-7. **Store Auto-Update** - Copilot-Pakete blockiert
-8. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
-9. **Scheduled Tasks** - AI-Tasks deaktivieren
-10. **Firewall-Regeln** - Netzwerk-Blockierung
+1b. **Deprovisioned Keys** - Feature Update Reinstallation Prevention
+2. **Registry-Konfiguration** - 44 Einstellungen (Windows, Edge, Office, M365 Copilot, AI-Features) ✨ ENHANCED v2.3
+3. **Kontextmenü-Blockierung** - Shell Extension GUID blockieren
+4. **AppLocker-Regeln** - 7 Deny Rules (Publisher + Path)
+4b. **Protocol Handler** - ms-copilot:// blockiert
+4c. **Store Auto-Update** - Copilot-Pakete blockiert
+4d. **Outlook Add-In Deaktivierung** ✨ NEU v2.3 - COM Add-Ins in Classic Outlook
+4e. **Edge Extension Blockierung** ✨ NEU v2.3 - Copilot-Extensions und Sidebar
+5. **DNS-Blockierung** - 6 Copilot-Domains in hosts-Datei
+6. **Scheduled Tasks** - AI-Tasks deaktivieren
+7-10. **Firewall & Reporting** - Netzwerk-Blockierung, Logs, Reports
 
 ### Parameter
 
@@ -206,6 +216,16 @@ Microsoft.WindowsCopilot_8wekyb3d8bbwe
 Microsoft.Windows.Copilot_8wekyb3d8bbwe
 Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe  ← NEU v2.2
 ```
+
+### Features v2.3
+
+✨ **Outlook COM Add-In Deaktivierung** - Disable-OutlookCopilotAddIn() deaktiviert Copilot in Classic Outlook
+✨ **Edge Extension Blockierung** - Block-EdgeCopilotExtensions() blockiert Copilot-Extensions
+✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, CopilotCDPPageContext, Sidebar-Settings
+✨ **4 neue Outlook Policy-Settings** - DisableCopilot, DisableCopilotInOutlook für HKLM/HKCU
+✨ **Policy-basierte Add-In-Blockierung** - DoNotLoadAddinList für Enterprise-Kontrolle
+✨ **HKU-Iteration für Outlook** - Add-Ins werden für alle User-Profile deaktiviert
+✨ **44 Registry-Einstellungen** - (vorher 33)
 
 ### Features v2.2
 
@@ -448,7 +468,28 @@ copilot-removal-toolkit/
 
 ## 📝 Changelog
 
-### v2.2.1 (Dezember 2025) - Current (Hotfix)
+### v2.3.0 (Januar 2026) - Current
+
+**Neue Features:**
+- ✨ **Outlook COM Add-In Deaktivierung** (Phase 4d) - Blockiert Copilot-Button in Classic Outlook
+- ✨ **Edge Copilot Extension Blockierung** (Phase 4e) - Blockiert Copilot-Extensions und Sidebar-Icon
+- ✨ **7 zusätzliche Edge Registry-Settings** - DiscoverPageContextEnabled, CopilotCDPPageContext, ShowRecommendationsEnabled, SpotlightExperiencesAndRecommendationsEnabled, EdgeAssetDeliveryServiceEnabled, HKCU Edge-Policies
+- ✨ **4 neue Outlook Policy-Settings** - DisableCopilot und DisableCopilotInOutlook für HKLM und HKCU
+- ✨ **Policy-basierte Add-In-Blockierung** - DoNotLoadAddinList mit AddinListEnabled für Enterprise-Kontrolle
+- ✨ **HKU-Iteration für Outlook Add-Ins** - Deaktiviert Add-Ins für alle User-Profile
+
+**Technische Details:**
+- 📊 Phase 4d: Disable-OutlookCopilotAddIn() - COM Add-In Deaktivierung via LoadBehavior=0
+- 📊 Phase 4e: Block-EdgeCopilotExtensions() - Extension-Blocklist und Sidebar-Settings
+- 📊 44 Registry-Einstellungen (vorher 33)
+- 📊 5 bekannte Copilot Add-In ProgIDs werden blockiert
+- 📊 3 Edge Extension IDs werden blockiert
+
+**Behobene Probleme aus Kundenfeedback:**
+- 🐛 Copilot-Button in Outlook-Toolbar (Classic Outlook)
+- 🐛 Copilot-Icon in Edge-Browser oben rechts
+
+### v2.2.1 (Dezember 2025) - Hotfix
 
 **Bugfixes:**
 - 🐛 **Self-Sabotage Bug** - Phase 6 deaktiviert nicht mehr den eigenen "Copilot-Removal" Task
@@ -551,7 +592,7 @@ copilot-removal-toolkit/
 
 ---
 
-**Letztes Update:** Dezember 2025 (v2.2.1)
+**Letztes Update:** Januar 2026 (v2.3.0)
 **Status:** ✅ Production Ready
 **Getestet auf:** Windows 10 22H2, Windows 11 24H2, Windows 11 Build 26100
-**Neu:** Self-Sabotage Bug behoben, Task-Erstellung via schtasks.exe, Versions-Tracking
+**Neu:** Outlook COM Add-In Deaktivierung, Edge Copilot Extension Blockierung

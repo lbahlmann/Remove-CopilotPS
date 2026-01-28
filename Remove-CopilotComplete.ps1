@@ -1,13 +1,14 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Microsoft Copilot Removal Toolkit v2.2
+    Microsoft Copilot Removal Toolkit v2.3
 .DESCRIPTION
     Comprehensive script for removing Microsoft Copilot and blocking reinstallation
     All v2.1 features: Edge, Office, Notepad, Paint, Recall, Hardware Button, Game Bar
     v2.1.2: Microsoft 365 Copilot complete blocking (Word, Excel, PowerPoint, Outlook, OneNote)
     v2.1.3: Reinstallation prevention (Provisioned Packages, Deprovisioned Keys, AppLocker, Protocol Handlers, Store Auto-Update)
     v2.2: Full Unattended mode with Scheduled Task support, HKU iteration for all users
+    v2.3: Edge Copilot Extensions blocking, Outlook COM Add-In deactivation
 .PARAMETER LogOnly
     Test run without actual changes
 .PARAMETER NoRestart
@@ -31,7 +32,7 @@
 .PARAMETER WithReboot
     Automatic reboot after execution (only for initial installation)
 .NOTES
-    Version: 2.2
+    Version: 2.3
 #>
 
 param(
@@ -95,7 +96,7 @@ if ($CreateScheduledTask) {
 }
 
 $ErrorActionPreference = "Continue"
-$Script:Version = "2.2.1"
+$Script:Version = "2.3.0"
 $Script:SecureInstallPath = "$env:ProgramFiles\badata\CopilotRemoval"
 $Script:StartTime = Get-Date
 
@@ -173,7 +174,7 @@ if ($BackupDir -ne "") {
 
 Write-Host "[DEBUG] Backup-Verzeichnis: $Script:BackupPath" -ForegroundColor Cyan
 $Script:ProgressCounter = 0
-$Script:TotalSteps = 50
+$Script:TotalSteps = 55
 $Script:Report = @{
     Version = $Script:Version
     StartTime = $Script:StartTime.ToString('o')
@@ -769,6 +770,15 @@ function Configure-RegistrySettings {
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='CopilotPageEnabled'; Value=0},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='Microsoft365CopilotChatIconEnabled'; Value=0},
 
+        # Edge Copilot - Erweiterte Blockierung (v2.3)
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='DiscoverPageContextEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='CopilotCDPPageContext'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='ShowRecommendationsEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SpotlightExperiencesAndRecommendationsEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='EdgeAssetDeliveryServiceEnabled'; Value=0},
+        @{Path='HKCU:\Software\Policies\Microsoft\Edge'; Name='HubsSidebarEnabled'; Value=0},
+        @{Path='HKCU:\Software\Policies\Microsoft\Edge'; Name='CopilotPageEnabled'; Value=0},
+
         # Office Connected Experiences (v2.1)
         @{Path='HKCU:\Software\Policies\Microsoft\office\16.0\common\privacy'; Name='disconnectedstate'; Value=2},
         @{Path='HKCU:\Software\Policies\Microsoft\office\16.0\common\privacy'; Name='usercontentdisabled'; Value=2},
@@ -789,6 +799,12 @@ function Configure-RegistrySettings {
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common'; Name='AllowCopilot'; Value=0},
         @{Path='HKCU:\Software\Policies\Microsoft\office\16.0\common\copilot'; Name='DisableCopilotInOffice'; Value=1},
         @{Path='HKLM:\SOFTWARE\Policies\Microsoft\office\16.0\common\copilot'; Name='DisableCopilotInOffice'; Value=1},
+
+        # Outlook Copilot Add-In Policy (v2.3)
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilot'; Value=1},
+        @{Path='HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilot'; Value=1},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilotInOutlook'; Value=1},
+        @{Path='HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Options\Copilot'; Name='DisableCopilotInOutlook'; Value=1},
 
         # Notepad AI (v2.1)
         @{Path='HKLM:\SOFTWARE\Policies\WindowsNotepad'; Name='DisableAIFeatures'; Value=1},
@@ -1141,6 +1157,208 @@ function Block-CopilotStoreAutoUpdate {
     Write-Log "Store Auto-Update - $BlockedCount Copilot-Pakete blockiert (Store bleibt funktional)" "SUCCESS"
 }
 
+function Disable-OutlookCopilotAddIn {
+    Write-ProgressHelper -Activity "Phase 4d" -Status "Deaktiviere Outlook Copilot Add-Ins..."
+    Write-Log "Deaktiviere Outlook Copilot COM Add-Ins (Classic Outlook)..." "INFO"
+
+    if ($LogOnly) {
+        Write-Log "Wuerde Outlook Copilot Add-Ins deaktivieren" "INFO"
+        return
+    }
+
+    # Bekannte Copilot Add-In ProgIDs
+    $CopilotAddIns = @(
+        'Microsoft.Copilot',
+        'Microsoft.OutlookCopilot',
+        'Microsoft365CopilotForOutlook',
+        'MicrosoftOutlookCopilot.Connect',
+        'OutlookCopilot.AddinModule'
+    )
+
+    $DisabledCount = 0
+
+    # Methode 1: LoadBehavior auf 0 setzen in HKLM (systemweit)
+    $HKLMAddInPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Office\Outlook\Addins',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\Outlook\Addins',
+        'HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Outlook\Addins'
+    )
+
+    foreach ($BasePath in $HKLMAddInPaths) {
+        if (Test-Path $BasePath) {
+            # Suche nach allen Copilot-aehnlichen Add-Ins
+            $SubKeys = Get-ChildItem -Path $BasePath -ErrorAction SilentlyContinue
+            foreach ($SubKey in $SubKeys) {
+                $KeyName = $SubKey.PSChildName
+                if ($KeyName -match 'Copilot|Microsoft\.Copilot|365Copilot') {
+                    try {
+                        Set-ItemProperty -Path $SubKey.PSPath -Name 'LoadBehavior' -Value 0 -Type DWord -ErrorAction Stop
+                        Write-Log "Add-In deaktiviert (HKLM): $KeyName (LoadBehavior=0)" "SUCCESS"
+                        $DisabledCount++
+                    }
+                    catch {
+                        Write-Log "Add-In Deaktivierung fehlgeschlagen: $KeyName - $($_.Exception.Message)" "WARNING"
+                    }
+                }
+            }
+        }
+    }
+
+    # Methode 2: LoadBehavior auf 0 setzen in HKCU fuer alle User (via HKU)
+    $HKCUAddInPath = 'Software\Microsoft\Office\Outlook\Addins'
+    $UserProfiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+        Where-Object { $_.Special -eq $false -and $_.SID -like 'S-1-5-21-*' }
+
+    foreach ($Profile in $UserProfiles) {
+        $SID = $Profile.SID
+        $HivePath = "$($Profile.LocalPath)\NTUSER.DAT"
+        $HiveLoaded = $false
+
+        # Pruefen ob Hive bereits geladen (User angemeldet)
+        if (-not (Test-Path "Registry::HKU\$SID")) {
+            $LoadResult = reg load "HKU\$SID" "$HivePath" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $HiveLoaded = $true
+            } else {
+                continue
+            }
+        }
+
+        # Add-Ins suchen und deaktivieren
+        $UserAddInPath = "Registry::HKU\$SID\$HKCUAddInPath"
+        if (Test-Path $UserAddInPath) {
+            $SubKeys = Get-ChildItem -Path $UserAddInPath -ErrorAction SilentlyContinue
+            foreach ($SubKey in $SubKeys) {
+                $KeyName = $SubKey.PSChildName
+                if ($KeyName -match 'Copilot|Microsoft\.Copilot|365Copilot') {
+                    try {
+                        Set-ItemProperty -Path $SubKey.PSPath -Name 'LoadBehavior' -Value 0 -Type DWord -ErrorAction Stop
+                        Write-Log "Add-In deaktiviert (HKU\$SID): $KeyName" "SUCCESS"
+                        $DisabledCount++
+                    }
+                    catch {
+                        Write-Log "Add-In Deaktivierung fehlgeschlagen (HKU): $KeyName - $($_.Exception.Message)" "WARNING"
+                    }
+                }
+            }
+        }
+
+        # Hive entladen wenn wir ihn geladen haben
+        if ($HiveLoaded) {
+            [gc]::Collect()
+            Start-Sleep -Milliseconds 100
+            reg unload "HKU\$SID" 2>&1 | Out-Null
+        }
+    }
+
+    # Methode 3: Policy-basierte Blockierung (DoNotLoadAddinList) - zuverlaessigste Methode
+    Write-Log "Erstelle Policy-basierte Add-In Blockierung..." "INFO"
+    $PolicyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Resiliency\AddinList'
+    if (-not (Test-Path $PolicyPath)) {
+        New-Item -Path $PolicyPath -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    foreach ($AddIn in $CopilotAddIns) {
+        try {
+            # Wert 0 = Immer deaktiviert (blockiert)
+            Set-ItemProperty -Path $PolicyPath -Name $AddIn -Value 0 -Type DWord -ErrorAction Stop
+            Write-Log "Add-In per Policy blockiert: $AddIn" "SUCCESS"
+        }
+        catch {
+            Write-Log "Policy-Blockierung fehlgeschlagen: $AddIn - $($_.Exception.Message)" "WARNING"
+        }
+    }
+
+    # Methode 4: DoNotLoadAddinList aktivieren
+    $DoNotLoadPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Outlook\Resiliency'
+    if (-not (Test-Path $DoNotLoadPath)) {
+        New-Item -Path $DoNotLoadPath -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+    Set-ItemProperty -Path $DoNotLoadPath -Name 'AddinListEnabled' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+
+    Write-Log "Outlook Copilot Add-Ins - $DisabledCount deaktiviert, Policy-Blockierung aktiv" "SUCCESS"
+}
+
+function Block-EdgeCopilotExtensions {
+    Write-ProgressHelper -Activity "Phase 4e" -Status "Blockiere Edge Copilot Extensions..."
+    Write-Log "Blockiere Edge Copilot Extensions und Sidebar..." "INFO"
+
+    if ($LogOnly) {
+        Write-Log "Wuerde Edge Copilot Extensions blockieren" "INFO"
+        return
+    }
+
+    # Bekannte Copilot Extension IDs
+    $CopilotExtensions = @(
+        'ghbmnnjooekpmoecnnnilnnbdlolhkhi',   # Microsoft Copilot (primär)
+        'jmjflgjpcpepeafmmgdpfkogkghcpiha',   # Bing Chat / Copilot
+        'pcmpcfapbekmbjjkdalcgopdkipoggdi'    # Microsoft Copilot alternative ID
+    )
+
+    # Extension Blocklist erstellen
+    $BlockListPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallBlocklist'
+    if (-not (Test-Path $BlockListPath)) {
+        New-Item -Path $BlockListPath -Force -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    $BlockedCount = 0
+    $Index = 1
+
+    # Hole existierende Eintraege um Index korrekt zu setzen
+    $ExistingEntries = Get-ItemProperty -Path $BlockListPath -ErrorAction SilentlyContinue
+    if ($ExistingEntries) {
+        $ExistingValues = $ExistingEntries.PSObject.Properties | Where-Object { $_.Name -match '^\d+$' }
+        if ($ExistingValues) {
+            $Index = ([int[]]($ExistingValues.Name) | Measure-Object -Maximum).Maximum + 1
+        }
+    }
+
+    foreach ($ExtId in $CopilotExtensions) {
+        # Pruefen ob bereits blockiert
+        $AlreadyBlocked = $false
+        if ($ExistingEntries) {
+            $AlreadyBlocked = $ExistingEntries.PSObject.Properties.Value -contains $ExtId
+        }
+
+        if (-not $AlreadyBlocked) {
+            try {
+                Set-ItemProperty -Path $BlockListPath -Name $Index -Value $ExtId -Type String -ErrorAction Stop
+                Write-Log "Edge Extension blockiert: $ExtId (Index: $Index)" "SUCCESS"
+                $Index++
+                $BlockedCount++
+            }
+            catch {
+                Write-Log "Edge Extension Blockierung fehlgeschlagen: $ExtId - $($_.Exception.Message)" "WARNING"
+            }
+        }
+        else {
+            Write-Log "Edge Extension bereits blockiert: $ExtId" "INFO"
+        }
+    }
+
+    # Sidebar komplett deaktivieren via zusaetzliche Registry-Keys
+    $EdgeSettingsPaths = @(
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarShowOnStartupEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarEnabled'; Value=0},
+        @{Path='HKLM:\SOFTWARE\Policies\Microsoft\Edge'; Name='SidebarSearchEnabled'; Value=0}
+    )
+
+    foreach ($Setting in $EdgeSettingsPaths) {
+        try {
+            if (-not (Test-Path $Setting.Path)) {
+                New-Item -Path $Setting.Path -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+            Set-ItemProperty -Path $Setting.Path -Name $Setting.Name -Value $Setting.Value -Type DWord -ErrorAction Stop
+            Write-Log "Edge Sidebar Setting: $($Setting.Name) = $($Setting.Value)" "SUCCESS"
+        }
+        catch {
+            Write-Log "Edge Sidebar Setting fehlgeschlagen: $($Setting.Name) - $($_.Exception.Message)" "WARNING"
+        }
+    }
+
+    Write-Log "Edge Copilot Extensions - $BlockedCount blockiert, Sidebar deaktiviert" "SUCCESS"
+}
+
 function Create-FirewallRules {
     Write-ProgressHelper -Activity "Phase 5" -Status "Erstelle Firewall-Regeln..."
     $DomainsToBlock = @(
@@ -1312,6 +1530,12 @@ Block-CopilotProtocolHandlers
 
 Write-Log "Starte Phase 4c - Store Auto-Update Blockierung..." "INFO"
 Block-CopilotStoreAutoUpdate
+
+Write-Log "Starte Phase 4d - Outlook Copilot Add-In Deaktivierung..." "INFO"
+Disable-OutlookCopilotAddIn
+
+Write-Log "Starte Phase 4e - Edge Copilot Extension Blockierung..." "INFO"
+Block-EdgeCopilotExtensions
 
 Write-Log "Starte Phase 5 - Firewall-Regeln..." "INFO"
 Create-FirewallRules
